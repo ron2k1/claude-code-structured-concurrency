@@ -1,7 +1,7 @@
 # claude-code-structured-concurrency — Design Specification
 
 > Version: 1.0.0
-> Status: shipped — 18+1 tests passing, 9ms reap latency verified on Windows 11 build 26200
+> Status: shipped — 22+1 tests passing, 9ms reap latency verified on Windows 11 build 26200
 > Author: Ronil Basu ([@ron2k1](https://github.com/ron2k1))
 > Created: 2026-05-07
 
@@ -127,7 +127,7 @@ Tests in `tests/`:
 2. `test-orphan-detect.ps1` -- 9 unit tests on synthetic process snapshots: orphan detection (with PID-reuse guard via `StartTime` comparison), classification, descendant tree walk.
 3. `test-config-loader.ps1` -- 9 unit tests on the config schema: defaults, malformed-JSON fallback, partial-config merge, and the spare-wins-over-kill safety invariant.
 
-All three suites must pass before any release tag. **18+1 tests passing as of v1.0.0.** CI on Windows runners is a v1.1 follow-up.
+All three suites must pass before any release tag. **22+1 tests passing as of v1.0.0.** CI on Windows runners is a v1.1 follow-up.
 
 ## Open questions (deferred)
 

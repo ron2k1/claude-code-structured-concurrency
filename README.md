@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-blue)](#compatibility)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-5391FE)](#compatibility)
-[![Tests](https://img.shields.io/badge/tests-18%2B1%20passing-brightgreen)](#tests)
+[![Tests](https://img.shields.io/badge/tests-22%2B1%20passing-brightgreen)](#tests)
 
 ## The problem
 
