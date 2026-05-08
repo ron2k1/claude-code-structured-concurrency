@@ -1,0 +1,20 @@
+{
+  "_description": "Most defensive profile. Only the obvious shell-shim chains get reaped (cmd.exe -> npx.cmd intermediaries). MCP servers themselves are spared in case they're holding state. Use this if you run custom in-house MCPs you can't afford to kill.",
+  "_when_to_use": "First-time install, or when you're not sure which orphans are safe to kill yet.",
+  "schema_version": 1,
+  "min_age_seconds": 60,
+  "spare_classifications": [
+    "claude",
+    "lsp",
+    "plugin-runtime",
+    "mcp-stdio",
+    "unknown"
+  ],
+  "spare_cmdline_patterns": [],
+  "kill_classifications": [
+    "cmd-shim",
+    "npx-wrapper"
+  ],
+  "kill_names": [],
+  "custom_classifiers": []
+}

@@ -1,0 +1,21 @@
+{
+  "_description": "Pure observability. Kills nothing. Use this if you want cc-procs.ps1 diagnostics and cleanup-orphans.ps1 dry-run reports without ever taking destructive action -- even with -Force.",
+  "_when_to_use": "Compliance environments, shared dev boxes, or when you're auditing what cleanup WOULD do without committing. Pair with the SessionStart hook to get per-session telemetry without side effects.",
+  "schema_version": 1,
+  "min_age_seconds": 30,
+  "spare_classifications": [
+    "claude",
+    "mcp-stdio",
+    "mcp-http",
+    "lsp",
+    "plugin-runtime",
+    "cmd-shim",
+    "npx-wrapper",
+    "hook-script",
+    "unknown"
+  ],
+  "spare_cmdline_patterns": [],
+  "kill_classifications": [],
+  "kill_names": [],
+  "custom_classifiers": []
+}

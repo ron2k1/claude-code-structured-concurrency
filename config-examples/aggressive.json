@@ -1,0 +1,37 @@
+{
+  "_description": "Aggressive cleanup. Kills any orphan node.exe or cmd.exe (the dominant offenders for Claude Code subprocess leaks) regardless of classification, plus all standard MCP/shim chains. Removes 'unknown' from the spare list -- if the classifier can't identify it AND its parent is dead AND it's older than min_age_seconds, it goes.",
+  "_when_to_use": "Heavy multi-session users who've confirmed their custom tools are listed in spare_cmdline_patterns. Run cc-procs.ps1 first to see what would be hit before enabling.",
+  "_warning": "Test with -DryRun first. spare_cmdline_patterns is your safety net here -- list every in-house tool you do NOT want killed.",
+  "schema_version": 1,
+  "min_age_seconds": 30,
+  "spare_classifications": [
+    "claude",
+    "lsp",
+    "plugin-runtime"
+  ],
+  "spare_cmdline_patterns": [
+    "my-stateful-tool",
+    "company-internal-mcp",
+    "lead-agent"
+  ],
+  "kill_classifications": [
+    "mcp-stdio",
+    "cmd-shim",
+    "npx-wrapper"
+  ],
+  "kill_names": [
+    "node.exe",
+    "cmd.exe"
+  ],
+  "custom_classifiers": [
+    {
+      "_comment": "Optional: tag your in-house MCPs so they show up correctly in cc-procs.ps1 diagnostic output.",
+      "pattern": "my-internal-mcp",
+      "classification": "mcp-stdio"
+    },
+    {
+      "pattern": "my-vector-store",
+      "classification": "plugin-runtime"
+    }
+  ]
+}

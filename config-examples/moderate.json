@@ -1,0 +1,21 @@
+{
+  "_description": "Balanced default. Kills standard MCP/shim orphan chains older than 30 seconds. Spares LSPs, plugin runtimes (which often hold state), and anything the classifier can't identify (unknown). This is the config install-reap.ps1 copies on first install.",
+  "_when_to_use": "Most users, most of the time. After running for a few days, you can graduate to aggressive.",
+  "_extension_hint": "Add patterns to spare_cmdline_patterns to protect specific in-house tools, e.g. ['my-stateful-tool', 'company-internal-mcp']. Each pattern is a regex matched case-insensitively against the full command line.",
+  "schema_version": 1,
+  "min_age_seconds": 30,
+  "spare_classifications": [
+    "claude",
+    "lsp",
+    "plugin-runtime",
+    "unknown"
+  ],
+  "spare_cmdline_patterns": [],
+  "kill_classifications": [
+    "mcp-stdio",
+    "cmd-shim",
+    "npx-wrapper"
+  ],
+  "kill_names": [],
+  "custom_classifiers": []
+}
