@@ -75,6 +75,28 @@ The installer adds an alias to `$PROFILE` and `~/.bashrc` so that future `claude
 
 If you launch via any of those, you'll get a working CC session, but Layer 3 is OFF for it. The 40-60 children of that session will orphan on ungraceful exit. This is the most common adoption pitfall -- see [`docs/FAQ.md`](docs/FAQ.md) for the full list and remedies.
 
+### Recommended: install with `-ShadowClaude`
+
+By default, the installer adds a `claude-jobbed` shim and leaves plain `claude` alone -- you have to type `claude-jobbed` to get protection. That's the conservative default (no surprise behavior change), but it's also why the v1.0.1 docs surfaced the adoption gap in the first place: most users won't type `claude-jobbed`. They'll type `claude`.
+
+Pass `-ShadowClaude` at install time to also redefine plain `claude` as a function that delegates to `claude-jobbed`:
+
+```powershell
+& "$env:USERPROFILE\.claude\skills\structured-concurrency\tools\install-reap.ps1" -ShadowClaude
+```
+
+After this, in any **fresh PowerShell or Git Bash window**, typing `claude` runs through the wrapper. PowerShell resolves Functions before PATH, so the function wins over `claude.exe` at parse time. The flag is opt-in and idempotent: re-run without it to remove the shadow, with it to re-add. Re-run with `-Uninstall` to remove both functions cleanly.
+
+What `-ShadowClaude` does **not** cover (still need explicit `claude-jobbed` or a manual re-launch):
+
+- `cmd.exe` (no `$PROFILE` mechanism)
+- `Win+R` -> `claude` (resolves against PATH only)
+- Desktop shortcuts to `claude.exe`
+- VS Code's terminal until you reload it after install
+- Anything calling `claude.exe` by absolute path
+
+For those, see [FAQ Q4](docs/FAQ.md#q4-i-launch-cc-from-a-desktop-shortcut--winr--vs-codes-integrated-terminal-does-it-pick-up-the-wrapper) for per-path remedies.
+
 ### Verify your current session is wrapped
 
 Open a PowerShell window and run:
@@ -97,21 +119,24 @@ If unwrapped, your session works fine for the conversation -- it just leaks all 
 ### Daily workflow once installed
 
 ```powershell
-# 1. Open a *fresh* PowerShell window (so $PROFILE re-evaluates the alias)
-# 2. Confirm the alias is loaded
-Get-Command claude    # CommandType should be "Alias" -> claude-jobbed.ps1
+# 1. Open a *fresh* PowerShell window (so $PROFILE re-evaluates the functions)
+# 2. Confirm what 'claude' resolves to
+Get-Command claude
+#    With -ShadowClaude:  CommandType=Function (Definition: claude-jobbed @args)
+#    Without:             CommandType=Application (the real claude.exe -- unwrapped!)
 
-# 3. Launch CC normally
-claude    # actually runs through claude-jobbed.ps1; Job Object created
+# 3. Launch CC
+claude          # if -ShadowClaude was used: routes through wrapper
+claude-jobbed   # always routes through wrapper (regardless of flag)
 
-# 4. Work normally. When done, `/exit` or X-button -- both reap cleanly.
+# 4. Work normally. When done, /exit or X-button -- both reap cleanly.
 
 # 5. Periodically (or via the SessionStart hook) sweep up leftovers
 #    from prior un-wrapped or crashed sessions:
 & "$env:USERPROFILE\.claude\skills\structured-concurrency\tools\cleanup-orphans.ps1" -Force
 ```
 
-If `Get-Command claude` reports `CommandType: Application` instead of `Alias`, your `$PROFILE` didn't run -- close the shell, open a new one, and try again. If it still doesn't load, see [FAQ Q3](docs/FAQ.md#q3-the-alias-is-in-my-profile-but-get-command-claude-still-shows-application).
+If `Get-Command claude` reports `Application` after running `-ShadowClaude`, your `$PROFILE` didn't load -- close the shell, open a new one, and try again. If it still doesn't load, see [FAQ Q3](docs/FAQ.md#q3-the-alias-is-in-my-profile-but-get-command-claude-still-shows-application).
 
 ## Configuration
 

@@ -12,8 +12,10 @@ Common questions, organized by category. If your question isn't here, [open an i
 
 The installer does three things:
 1. Seeds `~/.reap/config.json` (so the cleanup engine has a predicate)
-2. Adds a `claude` alias to `$PROFILE` (PowerShell)
-3. Adds a `claude` function to `~/.bashrc` (Git Bash)
+2. Adds a `claude-jobbed` function to `$PROFILE` (PowerShell)
+3. Adds a `claude-jobbed` function to `~/.bashrc` (Git Bash)
+
+By default, plain `claude` keeps pointing at the real `claude.exe` -- you have to type `claude-jobbed` explicitly to get protection. Pass `-ShadowClaude` at install time to also shadow plain `claude` so typing it routes through the wrapper. See [Q16](#q16-how-do-i-make-typing-claude-route-through-the-wrapper-without-having-to-type-claude-jobbed) for details.
 
 It does **not**:
 - Reach into your already-running `claude.exe` and assign it to a Job Object retroactively (that's not possible -- Job Objects must be assigned at process creation or via parent inheritance).
@@ -87,6 +89,42 @@ skip pid=10292 name=explorer.exe class=unknown reason=predicate-false
 The "candidate list" is intentionally inclusive (it's how the engine documents what it considered). The "would-kill" / "killed" lines are what actually fire. Always read the trailing `reap end mode=... would-kill=N skipped=M` line for the real outcome.
 
 If you ever see a Windows root process in the `would-kill` line, file an issue immediately -- that would be a config bug, not a normal state.
+
+### Q16: How do I make typing `claude` route through the wrapper without having to type `claude-jobbed`?
+
+Re-run the installer with the `-ShadowClaude` flag:
+
+```powershell
+& "$env:USERPROFILE\.claude\skills\structured-concurrency\tools\install-reap.ps1" -ShadowClaude
+```
+
+This adds a second function inside the same managed-block markers in `$PROFILE` and `~/.bashrc`:
+
+```powershell
+# In $PROFILE:
+function claude-jobbed { & '...claude-jobbed.ps1' @args }
+function claude { claude-jobbed @args }   # added by -ShadowClaude
+```
+
+PowerShell resolves Functions before Applications on PATH, so `claude` now hits the function (not `claude.exe`) at parse time. Verify in a fresh shell:
+
+```powershell
+Get-Command claude
+# CommandType : Function
+# Definition  : claude-jobbed @args
+```
+
+**Limits:** the shadow only takes effect in shells that load `$PROFILE` (PS) or `~/.bashrc` (Git Bash). Specifically, it does **not** intercept:
+
+- `cmd.exe` (no profile mechanism)
+- `Win+R` -> `claude` (resolves against PATH, no shell)
+- Desktop shortcuts pointing at `claude.exe`
+- VS Code's terminal until you reload it after the install
+- Anything calling `claude.exe` by absolute path
+
+For those, see [Q4](#q4-i-launch-cc-from-a-desktop-shortcut--winr--vs-codes-integrated-terminal-does-it-pick-up-the-wrapper). The flag is opt-in and idempotent: re-run `install-reap.ps1` (without the flag) to remove the shadow but keep `claude-jobbed`. Re-run with `-Uninstall` to remove both functions.
+
+**Why a function, not `Set-Alias`?** PowerShell's command-resolution order is: Alias -> Function -> Cmdlet -> Application. An alias named `claude` would lose to `claude.exe` on PATH. A function wins because functions are resolved before PATH lookup. Same trick the existing `claude-jobbed` shim already uses.
 
 ---
 
