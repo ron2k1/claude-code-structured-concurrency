@@ -87,7 +87,7 @@ Full schema, the `predicate.ps1` escape hatch for procedural rules, and worked c
 
 ## How it works
 
-`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` is a flag on Win32 Job Objects: when the last handle to the job is closed, the kernel terminates every member process. Chrome, Edge, and VS Code all use this to bound helper-process lifetime. Linux has the equivalent in `prctl(PR_SET_PDEATHSIG)` plus cgroups. Windows ships the primitive too. No Node.js runtime wires it up for child processes spawned from Claude Code.
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` is a flag on Win32 Job Objects: when the last handle to the job is closed, the kernel terminates every member process. Browser sandboxes use this to bound renderer and tab lifetime. Linux has the equivalent in `prctl(PR_SET_PDEATHSIG)` plus cgroups. Windows ships the primitive too. No Node.js runtime wires it up for child processes spawned from Claude Code.
 
 `claude-jobbed.ps1` does the wiring:
 
