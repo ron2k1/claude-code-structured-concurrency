@@ -15,6 +15,14 @@ Verified 9 ms reap latency on Windows 11 build 26200. 22 unit assertions plus 1 
   <img src="docs/architecture.svg" alt="Three-layer architecture: Visibility (cc-procs.ps1) and Cleanup (cleanup-orphans.ps1) and Prevention (claude-jobbed.ps1) over shared libraries, with the Prevention layer connecting to the Win32 Job Object kernel primitive" width="100%" />
 </p>
 
+## Demo
+
+<p align="center">
+  <video src="https://github.com/ron2k1/claude-code-structured-concurrency/raw/main/docs/demo.mp4" controls width="800"></video>
+</p>
+
+58-second screen capture. The orphan MCP count drops to zero on `claude.exe` exit, with cleanup driven by the kernel's Job Object close, not by application code. If the inline player doesn't load, [download the MP4 directly](https://github.com/ron2k1/claude-code-structured-concurrency/raw/main/docs/demo.mp4).
+
 ## Requirements
 
 - Windows 10 build 17134 (January 2018) or later. Job Object behavior was unreliable for this pattern on older builds.
