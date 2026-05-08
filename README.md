@@ -72,6 +72,46 @@ Inside a Claude Code session, the same flow is `/structured-concurrency [kill|in
 
 A SessionStart hook (`hooks/reap-on-start.ps1`) runs the cleanup in strict-orphan-only mode on every CC start, so leftovers from un-wrapped or crashed sessions are reaped automatically.
 
+## Auditable
+
+About 642 lines of PowerShell across `tools/` and `hooks/`, plus 345 lines of tests. The runtime reads top to bottom in 20 minutes.
+
+| Surface | Access | Note |
+|---------|--------|------|
+| Network | None | No `Invoke-WebRequest`, `Invoke-RestMethod`, sockets, or telemetry. |
+| File reads | `~/.reap/config.json`, `~/.reap/predicate.ps1`, the wrapper's own scripts | Nothing in `Documents/`, `OneDrive/`, source repos, or anywhere else under `$env:USERPROFILE`. |
+| File writes | `~/.claude/hooks/reap.log` only | Append-only log of kept, killed, and skipped decisions. No other writes. |
+| Registry | None | No `HKLM:\` or `HKCU:\` access. |
+| Process kills | `-Force` plus a user-authored `~/.reap/config.json` that opts in | Default install kills nothing. See [Configuration](#configuration). |
+| Shell profile | `install-reap.ps1 -ShadowClaude` appends one PowerShell function to `$PROFILE` | The function is human-readable. Removing the block reverts the install. |
+| `claude.exe` | Spawned as a child of the Job Object, never patched or hooked | The binary on disk is untouched. |
+| Background services | None | No Windows services, no scheduled tasks, no SessionStart hook unless you opt in. |
+
+Verify the scope yourself:
+
+```powershell
+# No network calls anywhere in the runtime:
+Select-String -Path .\tools\*.ps1,.\hooks\*.ps1 -Pattern 'Invoke-WebRequest|Invoke-RestMethod|System\.Net|curl|wget'
+
+# Every file the tool can write to:
+Select-String -Path .\tools\*.ps1,.\hooks\*.ps1 -Pattern 'Out-File|Set-Content|Add-Content|Tee-Object'
+
+# Run the full test suite without installing anything:
+.\tests\test-orphan-detect.ps1
+.\tests\test-config-loader.ps1
+.\tests\test-job-object.ps1
+```
+
+Uninstall is three commands:
+
+```powershell
+notepad $PROFILE                                                    # delete the `function claude { ... }` block
+Remove-Item -Recurse "$env:USERPROFILE\.reap"                       # remove your config (optional)
+Remove-Item -Recurse "$env:USERPROFILE\.claude\skills\structured-concurrency"
+```
+
+No registry cleanup, no service removal, no leftover state.
+
 ## Configuration
 
 The cleanup engine is **dangerous-by-omission**. Without `~/.reap/config.json`, `cleanup-orphans.ps1 -Force` is a guaranteed no-op. Aggression is opt-in.
