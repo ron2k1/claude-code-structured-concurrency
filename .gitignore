@@ -1,0 +1,26 @@
+# OS junk
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*~
+
+# Editor scratch
+*.bak
+*.swp
+*.swo
+*.tmp
+.idea/
+.vscode/
+
+# PowerShell artifacts
+*.ps1.bak
+
+# Log artifacts (reap.log lives at ~/.claude/hooks/, but if someone
+# runs cleanup-orphans.ps1 with cwd=this repo it could land here)
+*.log
+reap-test-*.json
+
+# Local test output dirs
+test-output/
+test-results/
