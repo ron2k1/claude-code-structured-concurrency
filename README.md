@@ -11,6 +11,10 @@ Claude Code spawns 40-60 child processes per session (MCP servers, plugins, LSPs
 
 Verified 9 ms reap latency on Windows 11 build 26200. 22 unit assertions plus 1 functional test, all passing.
 
+<p align="center">
+  <img src="docs/architecture.svg" alt="Three-layer architecture: Visibility (cc-procs.ps1) and Cleanup (cleanup-orphans.ps1) and Prevention (claude-jobbed.ps1) over shared libraries, with the Prevention layer connecting to the Win32 Job Object kernel primitive" width="100%" />
+</p>
+
 ## Requirements
 
 - Windows 10 build 17134 (January 2018) or later. Job Object behavior was unreliable for this pattern on older builds.

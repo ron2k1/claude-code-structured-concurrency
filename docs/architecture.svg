@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 500" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+  <title>claude-code-structured-concurrency: three-layer architecture</title>
+  <desc>Three independent layers (Visibility, Cleanup, Prevention) sit on shared libraries. The Prevention layer wires claude.exe into a Win32 Job Object so the kernel reaps the entire process tree on wrapper exit.</desc>
+
+  <rect width="880" height="500" fill="#ffffff"/>
+
+  <text x="40" y="38" font-size="20" font-weight="600" fill="#1a1a1a">Three-layer architecture</text>
+  <text x="40" y="60" font-size="13" fill="#57606a">All three layers are independent. Use any subset. Tests cover all three.</text>
+
+  <g>
+    <rect x="40" y="86" width="640" height="92" rx="6" fill="#f0fdf4" stroke="#2da44e" stroke-width="1.6"/>
+    <text x="60" y="112" font-size="11" font-weight="700" fill="#1a7f37" letter-spacing="1.2">L3   PREVENTION</text>
+    <text x="60" y="140" font-size="14" font-weight="600" fill="#1a1a1a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace">tools/claude-jobbed.ps1</text>
+    <text x="60" y="162" font-size="13" fill="#57606a">Wraps claude.exe in a Win32 Job Object. Kernel reaps the tree on wrapper exit.</text>
+  </g>
+
+  <g>
+    <rect x="40" y="194" width="640" height="92" rx="6" fill="#fffbeb" stroke="#d4a72c" stroke-width="1.6"/>
+    <text x="60" y="220" font-size="11" font-weight="700" fill="#7d4e00" letter-spacing="1.2">L2   CLEANUP</text>
+    <text x="60" y="248" font-size="14" font-weight="600" fill="#1a1a1a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace">tools/cleanup-orphans.ps1</text>
+    <text x="60" y="270" font-size="13" fill="#57606a">Reaps strict orphans per ~/.reap/config.json. Dry-run default. -Force to kill.</text>
+  </g>
+
+  <g>
+    <rect x="40" y="302" width="640" height="92" rx="6" fill="#eff6ff" stroke="#0969da" stroke-width="1.6"/>
+    <text x="60" y="328" font-size="11" font-weight="700" fill="#0550ae" letter-spacing="1.2">L1   VISIBILITY</text>
+    <text x="60" y="356" font-size="14" font-weight="600" fill="#1a1a1a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace">tools/cc-procs.ps1</text>
+    <text x="60" y="378" font-size="13" fill="#57606a">Read-only inventory. Tree, classification, orphan flag. Never kills.</text>
+  </g>
+
+  <g>
+    <rect x="40" y="412" width="800" height="58" rx="6" fill="#fafbfc" stroke="#d0d7de" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="60" y="434" font-size="11" font-weight="700" fill="#57606a" letter-spacing="1.2">SHARED LIBRARIES</text>
+    <text x="60" y="458" font-size="13" fill="#1a1a1a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace">lib/JobObject.ps1     lib/ProcessTree.ps1     lib/ConfigLoader.ps1</text>
+  </g>
+
+  <g>
+    <rect x="720" y="86" width="120" height="92" rx="6" fill="#fef2f2" stroke="#cf222e" stroke-width="1.6"/>
+    <text x="780" y="112" font-size="11" font-weight="700" fill="#a40e26" letter-spacing="1.2" text-anchor="middle">KERNEL</text>
+    <text x="780" y="138" font-size="12" font-weight="600" fill="#1a1a1a" text-anchor="middle">Win32</text>
+    <text x="780" y="154" font-size="12" font-weight="600" fill="#1a1a1a" text-anchor="middle">Job Object</text>
+    <text x="780" y="170" font-size="10" fill="#57606a" text-anchor="middle">KILL_ON_JOB_CLOSE</text>
+  </g>
+
+  <g>
+    <line x1="685" y1="132" x2="715" y2="132" stroke="#cf222e" stroke-width="2"/>
+    <polygon points="715,132 707,128 707,136" fill="#cf222e"/>
+    <line x1="685" y1="132" x2="715" y2="132" stroke="#cf222e" stroke-width="6" stroke-opacity="0">
+      <animate attributeName="stroke-opacity" values="0;0.55;0" dur="2.4s" repeatCount="indefinite"/>
+    </line>
+  </g>
+
+  <text x="720" y="244" font-size="11" fill="#7d4e00">L2 reads process tree.</text>
+  <text x="720" y="260" font-size="11" fill="#7d4e00">No kernel handles.</text>
+
+  <text x="720" y="352" font-size="11" fill="#0550ae">L1 is read-only.</text>
+  <text x="720" y="368" font-size="11" fill="#0550ae">No kernel handles.</text>
+</svg>
