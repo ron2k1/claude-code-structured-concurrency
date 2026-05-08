@@ -60,6 +60,59 @@ Inside a Claude Code session, the same flow is also available as slash commands:
 /structured-concurrency verify    # run tests
 ```
 
+## Critical: install is not adoption
+
+> **`install-reap.ps1` does not protect any CC session you currently have open. Layer 3 (the kernel-enforced reap) is only active if `claude.exe` was launched as a child of `claude-jobbed.ps1`. Any session launched a different way is unprotected.**
+
+The installer adds an alias to `$PROFILE` and `~/.bashrc` so that future `claude` invocations from PowerShell or Git Bash route through the wrapper. It cannot retroactively wrap a `claude.exe` that's already running, and it cannot intercept these launch paths:
+
+- Desktop shortcuts to `claude.exe`
+- `Win+R` -> `claude`
+- VS Code's integrated terminal (if it didn't reload `$PROFILE`)
+- Old PowerShell / Git Bash windows opened before installation
+- Task Scheduler entries
+- Anything that calls `claude.exe` by absolute path
+
+If you launch via any of those, you'll get a working CC session, but Layer 3 is OFF for it. The 40-60 children of that session will orphan on ungraceful exit. This is the most common adoption pitfall -- see [`docs/FAQ.md`](docs/FAQ.md) for the full list and remedies.
+
+### Verify your current session is wrapped
+
+Open a PowerShell window and run:
+
+```powershell
+$cc = Get-CimInstance Win32_Process -Filter "Name='claude.exe'"
+foreach ($c in $cc) {
+  $parent = Get-CimInstance Win32_Process -Filter "ProcessId=$($c.ParentProcessId)"
+  Write-Host ("PID {0} parent: {1} ({2})" -f $c.ProcessId, $parent.Name, $parent.CommandLine)
+}
+```
+
+Look at the output:
+
+- **Wrapped** (good): parent is `powershell.exe` with `claude-jobbed.ps1` in its command line.
+- **Unwrapped** (vulnerable to leaks): parent is `cmd.exe`, `WindowsTerminal.exe`, `Code.exe`, `explorer.exe`, or anything else.
+
+If unwrapped, your session works fine for the conversation -- it just leaks all its children if it dies ungracefully.
+
+### Daily workflow once installed
+
+```powershell
+# 1. Open a *fresh* PowerShell window (so $PROFILE re-evaluates the alias)
+# 2. Confirm the alias is loaded
+Get-Command claude    # CommandType should be "Alias" -> claude-jobbed.ps1
+
+# 3. Launch CC normally
+claude    # actually runs through claude-jobbed.ps1; Job Object created
+
+# 4. Work normally. When done, `/exit` or X-button -- both reap cleanly.
+
+# 5. Periodically (or via the SessionStart hook) sweep up leftovers
+#    from prior un-wrapped or crashed sessions:
+& "$env:USERPROFILE\.claude\skills\structured-concurrency\tools\cleanup-orphans.ps1" -Force
+```
+
+If `Get-Command claude` reports `CommandType: Application` instead of `Alias`, your `$PROFILE` didn't run -- close the shell, open a new one, and try again. If it still doesn't load, see [FAQ Q3](docs/FAQ.md#q3-the-alias-is-in-my-profile-but-get-command-claude-still-shows-application).
+
 ## Configuration
 
 The cleanup engine is **dangerous-by-omission, never dangerous-by-default**. `cleanup-orphans.ps1 -Force` is a no-op out of the box; aggression is opt-in via `~/.reap/config.json`.
