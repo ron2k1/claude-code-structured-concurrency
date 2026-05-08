@@ -13,6 +13,13 @@
 # Usage:
 #   .\install-reap.ps1                            # install with moderate profile
 #   .\install-reap.ps1 -ConfigProfile aggressive  # pick a starter profile
+#   .\install-reap.ps1 -ShadowClaude              # ALSO shadow plain `claude` so
+#                                                 # typing `claude` in PS/Bash routes
+#                                                 # through the wrapper (function form,
+#                                                 # not Set-Alias -- aliases lose to
+#                                                 # .exe on PATH). Re-run WITHOUT this
+#                                                 # flag removes the shadow but keeps
+#                                                 # claude-jobbed.
 #   .\install-reap.ps1 -SkipUserConfig            # don't create ~/.reap/
 #   .\install-reap.ps1 -Uninstall                 # remove aliases (leaves ~/.reap intact)
 
@@ -21,6 +28,7 @@ param(
     [switch] $Uninstall,
     [switch] $WhatIf,
     [switch] $SkipUserConfig,
+    [switch] $ShadowClaude,
     [ValidateSet('conservative', 'moderate', 'aggressive', 'paranoid')]
     [string] $ConfigProfile = 'moderate'
 )
@@ -99,11 +107,17 @@ function Edit-Block {
 # --- 1. PowerShell profile (CurrentUserAllHosts works for PS 5.1 + PS 7) -
 
 $psProfile = $PROFILE.CurrentUserAllHosts
-$psBlock = @"
-$markerStart
-function claude-jobbed { & '$wrapperPs' @args }
-$markerEnd
-"@
+$psLines = @(
+    $markerStart,
+    "function claude-jobbed { & '$wrapperPs' @args }"
+)
+if ($ShadowClaude) {
+    # Function form, not Set-Alias: PS aliases lose to .exe on PATH, but
+    # functions are resolved before PATH lookup at parse time.
+    $psLines += "function claude { claude-jobbed @args }"
+}
+$psLines += $markerEnd
+$psBlock = $psLines -join [Environment]::NewLine
 
 Edit-Block -Path $psProfile -Block $psBlock -Label 'PS-profile' -Remove:$Uninstall
 
@@ -111,13 +125,23 @@ Edit-Block -Path $psProfile -Block $psBlock -Label 'PS-profile' -Remove:$Uninsta
 
 $bashrc  = Join-Path $env:USERPROFILE '.bashrc'
 $bashWrapperEsc = $wrapperPs -replace '\\', '\\'
-$bashBlock = @"
-$markerStart
-claude-jobbed() {
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$bashWrapperEsc" "`$@"
+$bashLines = @(
+    $markerStart,
+    'claude-jobbed() {',
+    "    powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$bashWrapperEsc`" `"`$@`"",
+    '}'
+)
+if ($ShadowClaude) {
+    # Function form (not alias): functions work in non-interactive shells and
+    # nested subshells where bash aliases are typically off.
+    $bashLines += @(
+        'claude() {',
+        '    claude-jobbed "$@"',
+        '}'
+    )
 }
-$markerEnd
-"@
+$bashLines += $markerEnd
+$bashBlock = $bashLines -join [Environment]::NewLine
 
 Edit-Block -Path $bashrc -Block $bashBlock -Label 'bashrc' -Remove:$Uninstall
 
@@ -153,6 +177,17 @@ if ($Uninstall) {
     Write-Host "Install complete. Open a new shell, then verify:"
     Write-Host "  PowerShell: claude-jobbed --version"
     Write-Host "  Git Bash:   claude-jobbed --version"
+    if ($ShadowClaude) {
+        Write-Host ""
+        Write-Host "ShadowClaude active: typing 'claude' in PS / Git Bash now routes"
+        Write-Host "through the wrapper. cmd.exe / Win+R / desktop shortcuts are NOT"
+        Write-Host "affected -- those still need explicit 'claude-jobbed'."
+        Write-Host "Verify in a fresh shell:  Get-Command claude  (CommandType=Function)"
+    } else {
+        Write-Host ""
+        Write-Host "Tip: re-run with -ShadowClaude to make plain 'claude' route through"
+        Write-Host "the wrapper too (PS + Git Bash interactive sessions only)."
+    }
     Write-Host ""
     Write-Host "Next steps:"
     Write-Host "  1. Edit $userConfigPath to add your in-house tools to spare_cmdline_patterns"
