@@ -26,15 +26,27 @@ $ErrorActionPreference = 'Stop'
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $here 'lib\JobObject.ps1')
+. (Join-Path $here 'lib\SpawnPlan.ps1')
 
 # --- locate claude.exe --------------------------------------------------
 
 function Find-ClaudeExe {
-    # 1. PATH
-    $cmd = Get-Command claude -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandType -in 'Application', 'ExternalScript' } |
-        Select-Object -First 1
-    if ($cmd) { return $cmd.Source }
+    # Extension preference: prefer a real PE binary when one exists, then
+    # the most stable shim. .ps1 is last because the npm-shipped claude.ps1
+    # hangs when stdin is a redirected pipe (interactive-mode autodetect),
+    # while claude.cmd -> cmd.exe -> node.exe survives any I/O attachment.
+    $extRank = @{ '.exe' = 0; '.cmd' = 1; '.bat' = 2; '.ps1' = 3 }
+
+    # 1. PATH (Get-Command may return both shims; bias by extension)
+    $matches = Get-Command claude -All -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandType -in 'Application', 'ExternalScript' }
+    if ($matches) {
+        $cmd = $matches | Sort-Object {
+            $ext = ([System.IO.Path]::GetExtension($_.Source)).ToLowerInvariant()
+            if ($extRank.ContainsKey($ext)) { $extRank[$ext] } else { 99 }
+        } | Select-Object -First 1
+        if ($cmd) { return $cmd.Source }
+    }
 
     # 2. Common install locations
     $candidates = @(
@@ -60,14 +72,29 @@ if (-not $claudePath) {
 $job = New-CCJobObject
 
 # --- spawn claude as a child, preserving console I/O --------------------
+#
+# Start-Process -NoNewWindow only accepts true PE binaries. npm-installed
+# claude resolves to claude.cmd (a shim), and PowerShell .ps1 install
+# paths exist too -- both must be host-routed via cmd.exe / powershell.exe
+# or the OS loader returns ERROR_BAD_EXE_FORMAT ("%1 is not a valid Win32
+# application"). The host process is what gets assigned to the job; on
+# Win8+ children inherit the assignment, so KILL_ON_JOB_CLOSE still reaps
+# the real node.exe child the shim launches.
+
+$plan = Get-ClaudeSpawnPlan -ClaudePath $claudePath
 
 $startParams = @{
-    FilePath    = $claudePath
+    FilePath    = $plan.HostExe
     PassThru    = $true
     NoNewWindow = $true   # share console -> stdin/stdout/stderr forward
 }
+
+$allArgs = @($plan.HostArgs)
 if ($ClaudeArgs -and $ClaudeArgs.Count -gt 0) {
-    $startParams.ArgumentList = $ClaudeArgs
+    $allArgs += $ClaudeArgs
+}
+if ($allArgs.Count -gt 0) {
+    $startParams.ArgumentList = $allArgs
 }
 
 $proc = Start-Process @startParams
