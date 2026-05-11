@@ -49,25 +49,67 @@ use_strong_path() {
     return 0
 }
 
-# --- strong path: systemd transient scope ---------------------------------
+# --- strong path: systemd transient scope + watchdog ----------------------
 #
-# --user           : runs in the per-user systemd instance (no root needed)
-# --scope          : transient unit type that runs in OUR shell, not a
-#                    detached service -- so stdin/stdout/stderr stay wired
-#                    and exit code propagates cleanly.
-# --slice=         : groups all claude-code processes under one slice for
-#                    `systemctl --user status claude-code.slice` visibility.
-# --quiet          : suppresses the systemd "Running scope as unit" notice.
-# --unit=          : per-PID name keeps concurrent wrappers from colliding.
+# Why a watchdog: `systemd-run --scope` does NOT auto-stop the scope when
+# its controller (us) dies. Quoting systemd.scope(5): "When the last
+# process leaves the scope, systemd cleans the scope up." -- meaning scope
+# lifetime tracks descendant lifetime, not controller lifetime. So a
+# SIGKILL of this wrapper would leave the scope (with claude + descendants)
+# orphaned. Bash traps don't fire on SIGKILL either, so we can't tear it
+# down from in-process. We need an external supervisor.
+#
+# The watchdog is a backgrounded subshell that polls our PID via stat -c %Y
+# on /proc/$$ (mtime of the procfs entry == process start time, robust to
+# PID reuse). When it sees we're gone OR a different process now owns our
+# PID, it calls `systemctl --user stop` on the scope, which triggers
+# cgroup.kill of every descendant. This is what delivers the SIGKILL-
+# survival guarantee documented in the README.
 
 if use_strong_path; then
-    exec systemd-run \
+    unit="claude-jobbed-$$.scope"
+    parent_pid=$$
+    parent_birth="$(stat -c %Y "/proc/$parent_pid" 2>/dev/null || echo 0)"
+
+    # Watchdog: ignore inherited signals, poll parent identity, stop scope
+    # the moment the parent vanishes or the PID is recycled. Disowned so
+    # the parent shell's exit doesn't HUP it.
+    (
+        trap '' INT TERM HUP
+        while [ "$(stat -c %Y "/proc/$parent_pid" 2>/dev/null || echo 0)" = "$parent_birth" ] && [ "$parent_birth" != "0" ]; do
+            sleep 0.2
+        done
+        systemctl --user stop "$unit" >/dev/null 2>&1 || true
+    ) &
+    watchdog_pid=$!
+    disown "$watchdog_pid" 2>/dev/null || true
+
+    # Graceful-exit cleanup: stop the scope ourselves so cgroup.kill fires
+    # without waiting on the watchdog's poll interval, then take the
+    # watchdog out so it doesn't fire a second (no-op) stop after we exit.
+    cleanup_strong() {
+        kill "$watchdog_pid" 2>/dev/null || true
+        systemctl --user stop "$unit" >/dev/null 2>&1 || true
+    }
+    trap cleanup_strong EXIT INT TERM HUP
+
+    # Run systemd-run in foreground; --scope mode keeps stdin/stdout/stderr
+    # wired through and propagates exit code. set -e is off around it so
+    # a non-zero claude exit doesn't trigger our trap before we capture.
+    set +e
+    systemd-run \
         --user \
         --scope \
         --quiet \
         --slice=claude-code.slice \
-        --unit="claude-jobbed-$$.scope" \
+        --unit="$unit" \
         -- "$claude_path" "$@"
+    exit_code=$?
+    set -e
+
+    trap - EXIT
+    kill "$watchdog_pid" 2>/dev/null || true
+    exit "$exit_code"
 fi
 
 # --- fallback path: setpgid + trap ---------------------------------------
