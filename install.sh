@@ -38,8 +38,10 @@ case "$uname_s" in
     Linux)
         platform=linux
         kernel="$(uname -r | cut -d. -f1-2)"
-        # major.minor compare against 5.14
-        if printf '%s\n5.14\n' "$kernel" | sort -V -C 2>/dev/null; then
+        # major.minor compare against 5.14. sort -V -C succeeds when input is
+        # already in ascending order, so put the floor (5.14) FIRST and the
+        # detected kernel SECOND -- that succeeds iff kernel >= 5.14.
+        if printf '5.14\n%s\n' "$kernel" | sort -V -C 2>/dev/null; then
             guarantee="STRONG (cgroup.kill via systemd transient scope; kernel $kernel >= 5.14)"
         else
             guarantee="MEDIUM (setpgid + trap fallback; kernel $kernel below 5.14 floor)"
@@ -84,9 +86,9 @@ inject_into() {
         if [ "$force" -eq 1 ]; then
             # remove old block first (sed in-place; portable form needs tmp)
             local tmp; tmp="$(mktemp)"
-            awk -v open="$block_marker_open" -v close="$block_marker_close" '
-                $0 == open { skip = 1; next }
-                $0 == close { skip = 0; next }
+            awk -v marker_open="$block_marker_open" -v marker_close="$block_marker_close" '
+                $0 == marker_open { skip = 1; next }
+                $0 == marker_close { skip = 0; next }
                 !skip { print }
             ' "$rc" > "$tmp"
             mv "$tmp" "$rc"
@@ -106,9 +108,9 @@ uninstall_from() {
         return 0
     fi
     local tmp; tmp="$(mktemp)"
-    awk -v open="$block_marker_open" -v close="$block_marker_close" '
-        $0 == open { skip = 1; next }
-        $0 == close { skip = 0; next }
+    awk -v marker_open="$block_marker_open" -v marker_close="$block_marker_close" '
+        $0 == marker_open { skip = 1; next }
+        $0 == marker_close { skip = 0; next }
         !skip { print }
     ' "$rc" > "$tmp"
     mv "$tmp" "$rc"
