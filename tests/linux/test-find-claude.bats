@@ -37,9 +37,12 @@ make_fake_claude() {
 # --- Probe 1: PATH --------------------------------------------------------
 
 @test "find-claude: returns 127 when no claude exists anywhere" {
-    # `run -127` tells bats we EXPECT exit 127, silencing the BW01 warning
-    # bats-core emits when a backgrounded `run` returns an exec-failure code.
-    run -127 bash "$FIND"
+    # Direct invocation -- bypass `run` entirely. bats-core 1.5+ has `run -127`
+    # to declare the expected exit, but Ubuntu ships bats 1.2 (no -N support),
+    # which emits BW01 on `run` returning 127 and BW02 on `-N` syntax. The
+    # direct call avoids both.
+    bash "$FIND" >/dev/null 2>&1
+    status=$?
     [ "$status" -eq 127 ]
 }
 
