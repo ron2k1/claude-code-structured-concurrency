@@ -1,0 +1,76 @@
+name: tests
+
+on:
+  push:
+    branches: [main, "linux-port", "macos-port", "v*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ----- Linux: bats suite for tools/linux/ + install.sh -------------------
+  linux:
+    name: bats (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats-core
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y bats
+
+      - name: Probe environment
+        run: |
+          echo "kernel: $(uname -r)"
+          echo "bats:   $(bats --version)"
+          echo "systemd-run present: $(command -v systemd-run >/dev/null && echo yes || echo no)"
+
+      - name: Enable systemd --user (so cgroup-kill test exercises strong path)
+        # Without linger, the runner's --user systemd instance does not
+        # come up at boot. With linger on, default.target activates and
+        # the cgroup-kill test exercises the systemd-run --scope path
+        # instead of skipping. If linger fails for any reason, the test
+        # SKIPS cleanly and prints WHY -- it does not silently pass.
+        run: |
+          sudo loginctl enable-linger "$USER" || true
+          # Give the user manager a couple seconds to start.
+          for i in 1 2 3 4 5; do
+            if systemctl --user is-active default.target >/dev/null 2>&1; then
+              echo "systemd --user active (attempt $i)"
+              break
+            fi
+            sleep 1
+          done
+          systemctl --user is-active default.target || echo "(--user not active; cgroup test will skip honestly)"
+
+      - name: Run bats suite
+        run: |
+          chmod +x tools/linux/*.sh install.sh
+          bats --print-output-on-failure tests/linux/
+
+  # ----- Windows: existing PowerShell suite (Wave A retroactive coverage) --
+  windows:
+    name: pwsh (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run all tests/test-*.ps1 files
+        shell: pwsh
+        # Iterate top-level test files, fail fast on the first non-zero
+        # exit. Each test file already has its own pass/fail summary.
+        # The job-object integration test requires Windows kernel and
+        # is the one we most care about not regressing.
+        run: |
+          $tests = Get-ChildItem tests\test-*.ps1
+          if (-not $tests) { Write-Error "no test files found"; exit 1 }
+          foreach ($t in $tests) {
+            Write-Host "=== Running $($t.Name) ===" -ForegroundColor Cyan
+            & $t.FullName
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "FAIL: $($t.Name) exited $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+          }
+          Write-Host "ALL PASS" -ForegroundColor Green
