@@ -26,9 +26,11 @@ setup() {
     if ! systemctl --user is-active default.target >/dev/null 2>&1; then
         skip "systemctl --user not active in this environment -- run linger setup first"
     fi
-    # Skip on kernel < 5.14 (cgroup.kill not available).
+    # Skip on kernel < 5.14 (cgroup.kill not available). sort -V -C succeeds
+    # iff input is already ascending, so put the floor (5.14) FIRST and the
+    # detected kernel SECOND -- success means kernel >= 5.14.
     local k; k="$(uname -r | cut -d. -f1-2)"
-    if ! printf '%s\n5.14\n' "$k" | sort -V -C 2>/dev/null; then
+    if ! printf '5.14\n%s\n' "$k" | sort -V -C 2>/dev/null; then
         skip "kernel $k below 5.14 -- cgroup.kill unavailable"
     fi
 
@@ -48,12 +50,17 @@ FAKE
 }
 
 teardown() {
-    if [ -f "$SANDBOX/grandchild.pid" ]; then
-        local gc; gc="$(cat "$SANDBOX/grandchild.pid" 2>/dev/null || echo)"
-        [ -n "$gc" ] && kill -KILL "$gc" 2>/dev/null || true
+    # If setup() called skip() before SANDBOX was set, treat the cleanup as
+    # a no-op rather than failing teardown (which would convert a clean
+    # # skip into a not-ok and break the suite exit code).
+    if [ -n "${SANDBOX:-}" ]; then
+        if [ -f "$SANDBOX/grandchild.pid" ]; then
+            local gc; gc="$(cat "$SANDBOX/grandchild.pid" 2>/dev/null || echo)"
+            [ -n "$gc" ] && kill -KILL "$gc" 2>/dev/null || true
+        fi
+        rm -rf "$SANDBOX"
     fi
-    export PATH="$ORIG_PATH"
-    rm -rf "$SANDBOX"
+    [ -n "${ORIG_PATH:-}" ] && export PATH="$ORIG_PATH"
 }
 
 @test "claude-jobbed (strong): SIGKILL of wrapper still reaps via cgroup.kill" {

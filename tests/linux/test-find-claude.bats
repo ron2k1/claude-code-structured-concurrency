@@ -37,7 +37,9 @@ make_fake_claude() {
 # --- Probe 1: PATH --------------------------------------------------------
 
 @test "find-claude: returns 127 when no claude exists anywhere" {
-    run bash "$FIND"
+    # `run -127` tells bats we EXPECT exit 127, silencing the BW01 warning
+    # bats-core emits when a backgrounded `run` returns an exec-failure code.
+    run -127 bash "$FIND"
     [ "$status" -eq 127 ]
 }
 
