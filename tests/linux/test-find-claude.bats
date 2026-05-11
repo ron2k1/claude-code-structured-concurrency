@@ -37,12 +37,12 @@ make_fake_claude() {
 # --- Probe 1: PATH --------------------------------------------------------
 
 @test "find-claude: returns 127 when no claude exists anywhere" {
-    # Direct invocation -- bypass `run` entirely. bats-core 1.5+ has `run -127`
-    # to declare the expected exit, but Ubuntu ships bats 1.2 (no -N support),
-    # which emits BW01 on `run` returning 127 and BW02 on `-N` syntax. The
-    # direct call avoids both.
-    bash "$FIND" >/dev/null 2>&1
-    status=$?
+    # `cmd || status=$?` -- the `||` makes failure expected to bats so
+    # the test doesn't abort on bash's non-zero exit, AND we capture the
+    # actual exit code for the assertion. Avoids `run` (BW01 on 127-exit)
+    # and `run -127` (BW02 on Ubuntu's bats 1.2, which lacks -N support).
+    local status=0
+    bash "$FIND" >/dev/null 2>&1 || status=$?
     [ "$status" -eq 127 ]
 }
 
