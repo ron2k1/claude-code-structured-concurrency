@@ -49,6 +49,57 @@ jobs:
           chmod +x tools/linux/*.sh install.sh
           bats --print-output-on-failure tests/linux/
 
+  # ----- macOS: bats suite for tools/macos/ + install.sh (MEDIUM tier) ----
+  # Matrix covers BOTH architectures on purpose: macos-14 is Apple Silicon
+  # (arm64), macos-13 is Intel (x86_64). Process-group / signal / ps
+  # behavior is the load-bearing surface here and is exactly the kind of
+  # thing that can differ across arch, so fail-fast is off -- an arch-only
+  # regression must still surface the other arch's result.
+  macos:
+    name: bats (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-13]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats-core
+        # bats-core is the canonical Homebrew formula (it installs the
+        # `bats` binary); the bare `bats` formula is the dead pre-1.0 one.
+        run: brew install bats-core
+
+      - name: Probe environment (record which bash actually runs the suite)
+        # macOS ships Apple's frozen bash 3.2.57 at /bin/bash, but GitHub
+        # runners also put a modern Homebrew bash earlier on PATH. The
+        # wrapper is written 3.2-safe by construction; this records in the
+        # log which bash the functional suite exercises so the gap is
+        # documented, not hidden.
+        run: |
+          sw_vers
+          echo "arch:      $(uname -m)"
+          echo "bats:      $(bats --version)"
+          echo "PATH bash: $(bash --version | head -1)"
+          echo "/bin/bash: $(/bin/bash --version | head -1)  <- Apple stock 3.2.57"
+
+      - name: Static bash-3.2 safety check (parse under Apple stock /bin/bash)
+        # bats may run the suite under Homebrew bash, so separately prove
+        # the runtime scripts at least PARSE under the frozen 3.2.57 every
+        # real macOS user has. Catches syntax-level 3.2 breakage directly
+        # instead of trusting the runner's newer bash to stand in for it.
+        run: |
+          /bin/bash -n tools/macos/claude-jobbed.sh
+          /bin/bash -n tools/macos/find-claude.sh
+          /bin/bash -n install.sh
+          echo "tools/macos/*.sh + install.sh parse clean under bash 3.2.57"
+
+      - name: Run bats suite
+        run: |
+          chmod +x tools/macos/*.sh install.sh
+          bats --print-output-on-failure tests/macos/
+
   # ----- Windows: existing PowerShell suite (Wave A retroactive coverage) --
   windows:
     name: pwsh (windows-latest)
