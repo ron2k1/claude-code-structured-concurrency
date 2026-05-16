@@ -85,7 +85,9 @@ inject_into() {
     if grep -qF "$block_marker_open" "$rc" 2>/dev/null; then
         if [ "$force" -eq 1 ]; then
             # remove old block first (sed in-place; portable form needs tmp)
-            local tmp; tmp="$(mktemp)"
+            # Explicit template: GNU mktemp allows a bare `mktemp`, BSD
+            # mktemp (macOS) requires a template. This form works on both.
+            local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/csc-block.XXXXXX")"
             awk -v marker_open="$block_marker_open" -v marker_close="$block_marker_close" '
                 $0 == marker_open { skip = 1; next }
                 $0 == marker_close { skip = 0; next }
@@ -107,7 +109,8 @@ uninstall_from() {
     if ! grep -qF "$block_marker_open" "$rc" 2>/dev/null; then
         return 0
     fi
-    local tmp; tmp="$(mktemp)"
+    # portable mktemp (BSD/macOS needs an explicit template; see inject_into)
+    local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/csc-block.XXXXXX")"
     awk -v marker_open="$block_marker_open" -v marker_close="$block_marker_close" '
         $0 == marker_open { skip = 1; next }
         $0 == marker_close { skip = 0; next }
