@@ -50,18 +50,26 @@ jobs:
           bats --print-output-on-failure tests/linux/
 
   # ----- macOS: bats suite for tools/macos/ + install.sh (MEDIUM tier) ----
-  # Matrix covers BOTH architectures on purpose: macos-14 is Apple Silicon
-  # (arm64), macos-13 is Intel (x86_64). Process-group / signal / ps
-  # behavior is the load-bearing surface here and is exactly the kind of
-  # thing that can differ across arch, so fail-fast is off -- an arch-only
-  # regression must still surface the other arch's result.
+  # arm64 only (macos-14). Hosted Intel macOS (macos-13) was dropped in
+  # v1.2.0: GitHub is retiring hosted Intel macOS, so the macos-13 leg
+  # never got a runner -- every run sat in "awaiting a runner" until
+  # GitHub's hard 24h account ceiling and was auto-cancelled. timeout-minutes
+  # bounds execution time AFTER a runner is assigned, never queue time, so
+  # no workflow knob can rescue a starved label. The runtime scripts are
+  # architecture-neutral (process groups / signals / ps, no arch-specific
+  # paths) and bash-3.2-safe by construction; the "Static bash-3.2 safety
+  # check" step below is the standing proof of the 3.2 constraint, so only
+  # x86_64 *execution* is uncovered, not syntax. Restoring an Intel
+  # execution leg is tracked as an explicit open gap: issue #3. Matrix kept
+  # single-entry (not collapsed) so re-adding Intel is a one-line change;
+  # fail-fast stays off for when it returns.
   macos:
     name: bats (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-13]
+        os: [macos-14]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
