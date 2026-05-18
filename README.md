@@ -9,7 +9,7 @@
 
 Claude Code spawns 40-60 child processes per session (MCP servers, plugins, LSPs, hooks). They often outlive their parent. After a few days, Task Manager (Windows) or `ps -ef` (Linux) fills with `node` entries from sessions that closed hours ago, and reboot becomes the cleanup primitive. This skill wires up the same kernel mechanisms Chrome, Edge, VS Code, and `systemd-run --scope` already use to bound helper-process lifetime, so the OS reaps the tree instead.
 
-Verified 9 ms reap latency on Windows 11 build 26200. 36 PowerShell unit assertions plus 1 functional test (Windows side) and 40 bats tests (Linux + macOS), all passing in CI.
+Verified 9 ms reap latency on Windows 11 build 26200. 36 PowerShell unit assertions plus 1 functional test (Windows side) and 41 bats tests (Linux + macOS), all passing in CI.
 
 ## Guarantee matrix
 
@@ -261,7 +261,7 @@ Full architecture: [`DESIGN.md`](DESIGN.md).
 
 ## Tests
 
-36 PowerShell unit assertions plus 1 functional test (Windows side), 18 bats tests (Linux), and 22 bats tests (macOS), all passing in the GitHub Actions matrix.
+36 PowerShell unit assertions plus 1 functional test (Windows side), 19 bats tests (Linux), and 22 bats tests (macOS), all passing in the GitHub Actions matrix.
 
 **Windows (`tests/test-*.ps1`):**
 

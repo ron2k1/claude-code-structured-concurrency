@@ -1,7 +1,7 @@
 # claude-code-structured-concurrency — Design Specification
 
 > Version: 1.2.0
-> Status: shipped — Windows STRONG (v1.0.0), Linux STRONG+MEDIUM (v1.1.0), macOS MEDIUM + cmd.exe shim (v1.2.0). 36+1 pwsh + 40 bats tests passing; 9ms reap latency verified on Windows 11 build 26200.
+> Status: shipped — Windows STRONG (v1.0.0), Linux STRONG+MEDIUM (v1.1.0), macOS MEDIUM + cmd.exe shim (v1.2.0). 36+1 pwsh + 41 bats tests passing; 9ms reap latency verified on Windows 11 build 26200.
 > Author: Ronil Basu ([@ron2k1](https://github.com/ron2k1))
 > Created: 2026-05-07
 > Revised: 2026-05-16 — v1.2.0 macOS MEDIUM tier + cmd.exe shim
@@ -155,7 +155,7 @@ Tests in `tests/`:
 4. `test-spawn-plan.ps1` -- 14 assertions on wrapper host-routing for `.cmd`/`.bat`/`.ps1` Claude shims (npm-installed Claude ships a shim, not an `.exe`) and extension-priority resolution.
 5. `tests/linux/*.bats` (18) + `tests/macos/*.bats` (22) -- find-claude probe priority, pgid/watchdog cleanup, installer idempotency, and the two load-bearing *negative* tests: `tests/linux/test-cgroup-kill.bats` (Linux STRONG must survive wrapper SIGKILL via `cgroup.kill`) and `tests/macos/test-honesty.bats` (the macOS MEDIUM ceiling — simultaneous wrapper+watchdog SIGKILL leaks by design, and is asserted to still leak so it cannot silently regress).
 
-All suites must pass before any release tag. **36+1 PowerShell + 40 bats (18 Linux + 22 macOS) passing as of v1.2.0.** CI runs `ubuntu-latest`, `macos-14`, and `windows-latest` on every push; see `.github/workflows/test.yml`. Hosted Intel `macos-13` was dropped in v1.2.0 — GitHub is retiring hosted Intel macOS, so that leg never received a runner and ran to GitHub's hard 24h "awaiting a runner" ceiling (`timeout-minutes` bounds execution after assignment, never queue time); the scripts are architecture-neutral and bash-3.2-safe by construction, so only x86_64 *execution* is uncovered, tracked as an explicit open gap (#3). (CI on Windows runners was the v1.1 follow-up promised in the original spec; it shipped in v1.1.0 alongside the Linux port and was extended to macOS in v1.2.0.)
+All suites must pass before any release tag. **36+1 PowerShell + 41 bats (19 Linux + 22 macOS) passing as of v1.2.0.** CI runs `ubuntu-latest`, `macos-14`, and `windows-latest` on every push; see `.github/workflows/test.yml`. Hosted Intel `macos-13` was dropped in v1.2.0 — GitHub is retiring hosted Intel macOS, so that leg never received a runner and ran to GitHub's hard 24h "awaiting a runner" ceiling (`timeout-minutes` bounds execution after assignment, never queue time); the scripts are architecture-neutral and bash-3.2-safe by construction, so only x86_64 *execution* is uncovered, tracked as an explicit open gap (#3). (CI on Windows runners was the v1.1 follow-up promised in the original spec; it shipped in v1.1.0 alongside the Linux port and was extended to macOS in v1.2.0.)
 
 ## Open questions (deferred)
 
