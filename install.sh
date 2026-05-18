@@ -6,7 +6,10 @@
 # routes through the wrapper.
 #
 # Windows users: run install-reap.ps1 from PowerShell instead.
-# macOS users: not yet supported (v1.2.0 milestone).
+# macOS: supported at the MEDIUM tier (setpgid + out-of-process watchdog;
+#   survives Force-Quit / kill -9 of the wrapper alone, but NOT a
+#   simultaneous kill -9 of wrapper AND watchdog -- macOS has no
+#   cgroup.kill or Job Object equivalent). The banner restates this.
 #
 # Flags:
 #   --yes / -y   non-interactive (skip the prompt; required for CI)
@@ -48,9 +51,9 @@ case "$uname_s" in
         fi
         ;;
     Darwin)
-        printf 'install.sh: macOS support is on the v1.2.0 roadmap, not v1.1.0.\n' >&2
-        printf '  Track: https://github.com/ron2k1/claude-code-structured-concurrency/milestones\n' >&2
-        exit 1
+        platform=macos
+        mac_ver="$(sw_vers -productVersion 2>/dev/null || echo '?')"
+        guarantee="MEDIUM (setpgid + out-of-process watchdog; macOS $mac_ver). Survives Force-Quit / kill -9 of the wrapper alone. NOT survivable if the wrapper AND its watchdog are kill -9'd simultaneously -- macOS has no cgroup.kill or Job Object equivalent. This is the honest ceiling, not a TODO."
         ;;
     *)
         printf 'install.sh: unsupported OS %s\n' "$uname_s" >&2
@@ -85,7 +88,9 @@ inject_into() {
     if grep -qF "$block_marker_open" "$rc" 2>/dev/null; then
         if [ "$force" -eq 1 ]; then
             # remove old block first (sed in-place; portable form needs tmp)
-            local tmp; tmp="$(mktemp)"
+            # Explicit template: GNU mktemp allows a bare `mktemp`, BSD
+            # mktemp (macOS) requires a template. This form works on both.
+            local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/csc-block.XXXXXX")"
             awk -v marker_open="$block_marker_open" -v marker_close="$block_marker_close" '
                 $0 == marker_open { skip = 1; next }
                 $0 == marker_close { skip = 0; next }
@@ -107,7 +112,8 @@ uninstall_from() {
     if ! grep -qF "$block_marker_open" "$rc" 2>/dev/null; then
         return 0
     fi
-    local tmp; tmp="$(mktemp)"
+    # portable mktemp (BSD/macOS needs an explicit template; see inject_into)
+    local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/csc-block.XXXXXX")"
     awk -v marker_open="$block_marker_open" -v marker_close="$block_marker_close" '
         $0 == marker_open { skip = 1; next }
         $0 == marker_close { skip = 0; next }
@@ -117,18 +123,45 @@ uninstall_from() {
     printf '  removed from %s\n' "$rc"
 }
 
+# --- rc-file targets (single source of truth: install AND uninstall use
+# these so the two can never drift). macOS Terminal.app runs bash as a
+# LOGIN shell, which reads ~/.bash_profile and NOT ~/.bashrc -- so macOS
+# must target .bash_profile too. zsh is the macOS default shell since
+# Catalina; .zshrc covers it on every platform. inject_into/uninstall_from
+# already skip files that don't exist, so listing extras is harmless.
+# Explicit if/then (not `[ ] && cmd`) because set -e would abort on the
+# false branch's non-zero compound exit. --------------------------------
+
+inject_all() {
+    inject_into "$HOME/.zshrc"
+    if [ "$platform" = "macos" ]; then inject_into "$HOME/.bash_profile"; fi
+    inject_into "$HOME/.bashrc"
+    inject_into "$HOME/.config/fish/config.fish"
+}
+
+uninstall_all() {
+    uninstall_from "$HOME/.zshrc"
+    if [ "$platform" = "macos" ]; then uninstall_from "$HOME/.bash_profile"; fi
+    uninstall_from "$HOME/.bashrc"
+    uninstall_from "$HOME/.config/fish/config.fish"
+}
+
 # --- uninstall path ------------------------------------------------------
 
 if [ "$uninstall" -eq 1 ]; then
     printf 'Uninstalling claude-code-structured-concurrency shell-function block:\n'
-    uninstall_from "$HOME/.bashrc"
-    uninstall_from "$HOME/.zshrc"
-    uninstall_from "$HOME/.config/fish/config.fish"
+    uninstall_all
     printf 'Done. Restart your shell to take effect.\n'
     exit 0
 fi
 
 # --- install path: pre-flight ack ----------------------------------------
+
+if [ "$platform" = "macos" ]; then
+    rc_human="~/.zshrc, ~/.bash_profile, ~/.bashrc, ~/.config/fish/config.fish"
+else
+    rc_human="~/.bashrc, ~/.zshrc, ~/.config/fish/config.fish"
+fi
 
 cat <<INFO
 This wraps \`claude\` in a process supervisor so child processes are
@@ -138,7 +171,7 @@ reaped on exit instead of leaking.
   Guarantee: $guarantee
 
 Will append a shell function to:
-  ~/.bashrc, ~/.zshrc, ~/.config/fish/config.fish (each, if present)
+  $rc_human (each, if present)
 
 Wrapper path: $wrapper
 
@@ -153,9 +186,7 @@ if [ "$assume_yes" -eq 0 ]; then
     esac
 fi
 
-inject_into "$HOME/.bashrc"
-inject_into "$HOME/.zshrc"
-inject_into "$HOME/.config/fish/config.fish"
+inject_all
 
 cat <<DONE
 

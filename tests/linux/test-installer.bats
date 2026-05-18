@@ -16,10 +16,13 @@ setup() {
     touch "$HOME/.zshrc"
     # leave fish unset to verify "skip when absent" behavior
 
-    # Skip the entire suite if we're not on Linux -- install.sh refuses
-    # to run on Darwin (v1.2 milestone) or unknown OSes.
+    # These assertions encode the LINUX rc-file contract specifically:
+    # the Linux installer targets ~/.bashrc + ~/.zshrc and deliberately
+    # never writes ~/.bash_profile. macOS is now supported too, but its
+    # path targets ~/.bash_profile as well and is covered by its own
+    # suite, so off-Linux this file skips rather than mis-asserting.
     if [ "$(uname -s)" != "Linux" ]; then
-        skip "install.sh is Linux-only in v1.1.0 -- macOS lands in v1.2.0"
+        skip "Linux rc-file contract; macOS path covered by tests/macos/test-installer.bats"
     fi
 }
 
