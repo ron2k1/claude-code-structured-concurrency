@@ -48,8 +48,12 @@ function Find-ClaudeExe {
         if ($cmd) { return $cmd.Source }
     }
 
-    # 2. Common install locations
+    # 2. Common install locations. Native-installer paths first: they hold a
+    # real PE binary and, unlike npm shims, are not deleted-then-recreated
+    # mid-update (npm install -g leaves a window where no shim exists).
     $candidates = @(
+        (Join-Path $env:USERPROFILE  '.local\bin\claude.exe'),
+        (Join-Path $env:USERPROFILE  '.claude\local\claude.exe'),
         (Join-Path $env:LOCALAPPDATA 'Programs\@anthropic-ai\claude-code\claude.exe'),
         (Join-Path $env:APPDATA      'npm\claude.cmd'),
         (Join-Path $env:APPDATA      'npm\claude.ps1'),
@@ -63,7 +67,9 @@ function Find-ClaudeExe {
 
 $claudePath = Find-ClaudeExe
 if (-not $claudePath) {
-    Write-Error "claude not found in PATH or common install locations. Install Claude Code first."
+    Write-Error ("claude not found in PATH or common install locations. " +
+        "If Claude Code is updating right now, the npm shims vanish for a few " +
+        "seconds mid-reinstall -- retry shortly. Otherwise install Claude Code first.")
     exit 127
 }
 
