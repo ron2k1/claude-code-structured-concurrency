@@ -15,12 +15,12 @@ Verified 9 ms reap latency on Windows 11 build 26200. 36 PowerShell unit asserti
 
 | Platform | Mechanism | SIGKILL of wrapper survives? | Status |
 |---|---|---|---|
-| Windows 10+ | Win32 Job Object + `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` | Yes (kernel reaps on handle close, including Task Manager End-Task) | **STRONG** — shipped v1.0.0 |
-| Linux 5.14+ | `systemd-run --user --scope` + `cgroup.kill` | Yes (cgroup-level kill, kernel-enforced) | **STRONG** — shipped v1.1.0 |
-| Linux <5.14 / containers / WSL1 | bash `set -m` + `trap` on EXIT/INT/TERM/HUP + `killpg` | No (trap doesn't fire on `kill -9`) | **MEDIUM** — fallback, shipped v1.1.0 |
-| macOS | `setpgid` + `trap` + disowned out-of-process watchdog | Yes if only the wrapper is killed (the watchdog outlives it and reaps the tree); No if wrapper and watchdog are SIGKILLed simultaneously | **MEDIUM** — shipped v1.2.0; honest ceiling stated in the install banner and pinned by `tests/macos/test-honesty.bats` |
+| Windows 10+ | Win32 Job Object + `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` | Yes (kernel reaps on handle close, including Task Manager End-Task) | **STRONG**. Shipped v1.0.0 |
+| Linux 5.14+ | `systemd-run --user --scope` + `cgroup.kill` | Yes (cgroup-level kill, kernel-enforced) | **STRONG**. Shipped v1.1.0 |
+| Linux <5.14 / containers / WSL1 | bash `set -m` + `trap` on EXIT/INT/TERM/HUP + `killpg` | No (trap doesn't fire on `kill -9`) | **MEDIUM**. Fallback, shipped v1.1.0 |
+| macOS | `setpgid` + `trap` + disowned out-of-process watchdog | Yes if only the wrapper is killed (the watchdog outlives it and reaps the tree). No if wrapper and watchdog are SIGKILLed simultaneously | **MEDIUM**. Shipped v1.2.0. Honest ceiling stated in the install banner and pinned by `tests/macos/test-honesty.bats` |
 
-Running on Linux <5.14, or on macOS? The installer prints which tier you're getting at install time, so there's no surprise.
+On Linux <5.14 or on macOS, the installer prints which tier you're getting at install time, so there's no surprise.
 
 <p align="center">
   <img src="docs/architecture.svg" alt="Three-layer architecture: Visibility (cc-procs.ps1) and Cleanup (cleanup-orphans.ps1) and Prevention (claude-jobbed.ps1) over shared libraries, with the Prevention layer connecting to the Win32 Job Object kernel primitive" width="100%" />
@@ -45,13 +45,13 @@ Running on Linux <5.14, or on macOS? The installer prints which tier you're gett
 - Optional but recommended: kernel 5.14+ (Aug 2021, in every supported distro) and `systemd-run` available, for the STRONG `cgroup.kill` path. Without these the installer drops to the MEDIUM trap-based fallback and tells you so.
 
 **macOS side:**
-- bash — Apple's stock `/bin/bash` 3.2.57 is sufficient; the wrapper, finder, and installer are written 3.2-safe by construction. zsh and fish are also wired.
-- macOS has no `cgroup.kill` / Job-Object analog, so it is MEDIUM tier by construction (`setpgid` + `trap` + disowned out-of-process watchdog). The installer states this ceiling explicitly at install time — there is no STRONG path to opt into.
+- bash. Apple's stock `/bin/bash` 3.2.57 is sufficient. The wrapper, finder, and installer are written 3.2-safe by construction. zsh and fish are also wired.
+- macOS has no `cgroup.kill` / Job-Object analog, so it is MEDIUM tier by construction (`setpgid` + `trap` + disowned out-of-process watchdog). The installer states this ceiling explicitly at install time. There is no STRONG path to opt into.
 
 Zero external dependencies on any platform. No PowerShell modules, no Node, no Python, no `sudo`.
 
 > [!IMPORTANT]
-> **Windows: automatic shadowing is PowerShell-only — but cmd.exe is supported.** `-ShadowClaude` redefines `claude` via `$PROFILE`, a PowerShell concept; cmd.exe has no equivalent AutoRun profile, so plain `claude` typed into a bare cmd.exe window runs unprotected. cmd.exe users are not stuck: [`tools\claude-jobbed.cmd`](tools/claude-jobbed.cmd) delegates to the PowerShell wrapper and inherits the exact same **STRONG** Job Object guarantee. Invoke it directly, or add a per-session macro with `doskey claude=C:\path\to\tools\claude-jobbed.cmd $*`. PowerShell and Git Bash get automatic shadowing. Per-launcher details and remedies live in [`docs/FAQ.md`](docs/FAQ.md).
+> **Windows: automatic shadowing is PowerShell-only, but cmd.exe is supported.** `-ShadowClaude` redefines `claude` via `$PROFILE`, a PowerShell concept. cmd.exe has no equivalent AutoRun profile, so plain `claude` typed into a bare cmd.exe window runs unprotected. cmd.exe users are not stuck: [`tools\claude-jobbed.cmd`](tools/claude-jobbed.cmd) delegates to the PowerShell wrapper and inherits the exact same STRONG Job Object guarantee. Invoke it directly, or add a per-session macro with `doskey claude=C:\path\to\tools\claude-jobbed.cmd $*`. PowerShell and Git Bash get automatic shadowing. Per-launcher details and remedies live in [`docs/FAQ.md`](docs/FAQ.md).
 
 ## Install
 
@@ -86,7 +86,7 @@ cd "$HOME/.claude/skills/structured-concurrency"
 ./install.sh
 ```
 
-The same `install.sh` covers Linux and macOS. On Linux it detects your kernel version and prints which guarantee tier you're getting (STRONG on 5.14+, MEDIUM below). On macOS it prints the MEDIUM tier and the honest ceiling: the disowned watchdog reaps the tree if the wrapper alone is Force-Quit, but a *simultaneous* SIGKILL of both wrapper and watchdog is unrecoverable because macOS has no kernel job-object/cgroup primitive. Either way it asks for `[y/N]` confirmation. It injects an idempotent shell function block into `~/.bashrc`, `~/.zshrc`, and `~/.config/fish/config.fish` (each only if the rc file already exists); on macOS it also writes `~/.bash_profile`, because macOS Terminal.app runs bash as a login shell and login shells source `~/.bash_profile`, not `~/.bashrc`. Plain `claude` then routes through the wrapper.
+The same `install.sh` covers Linux and macOS. On Linux it detects your kernel version and prints which guarantee tier you're getting (STRONG on 5.14+, MEDIUM below). On macOS it prints the MEDIUM tier and the honest ceiling: the disowned watchdog reaps the tree if the wrapper alone is Force-Quit, but a simultaneous SIGKILL of both wrapper and watchdog is unrecoverable because macOS has no kernel job-object/cgroup primitive. Either way it asks for `[y/N]` confirmation. It injects an idempotent shell function block into `~/.bashrc`, `~/.zshrc`, and `~/.config/fish/config.fish` (each only if the rc file already exists). On macOS it also writes `~/.bash_profile`, because macOS Terminal.app runs bash as a login shell and login shells source `~/.bash_profile`, not `~/.bashrc`. Plain `claude` then routes through the wrapper.
 
 ```bash
 # CI / unattended:
@@ -133,7 +133,7 @@ type claude
 | Tool | Layer | What it does |
 |------|-------|--------------|
 | [`tools/macos/find-claude.sh`](tools/macos/find-claude.sh) | Discovery | Same 9-probe order as Linux, written bash-3.2-safe (Apple ships frozen bash 3.2.57 at `/bin/bash`). The fnm probe additionally checks `~/Library/Application Support/fnm`, fnm's default `FNM_DIR` on macOS. |
-| [`tools/macos/claude-jobbed.sh`](tools/macos/claude-jobbed.sh) | Prevention | MEDIUM-tier wrapper. `set -m` gives the child its own process group; a `trap` reaps it on graceful exit or catchable signal; a disowned out-of-process watchdog (its own pgid, parent-identity check via `ps -p $pid -o lstart=` since macOS has no `/proc`) reaps the tree even when the wrapper alone is Force-Quit. Simultaneous SIGKILL of wrapper and watchdog is the honest ceiling — macOS has no kernel job-object/cgroup primitive. |
+| [`tools/macos/claude-jobbed.sh`](tools/macos/claude-jobbed.sh) | Prevention | MEDIUM-tier wrapper. `set -m` gives the child its own process group. A `trap` reaps it on graceful exit or catchable signal. A disowned out-of-process watchdog (its own pgid, parent-identity check via `ps -p $pid -o lstart=` since macOS has no `/proc`) reaps the tree even when the wrapper alone is Force-Quit. Simultaneous SIGKILL of wrapper and watchdog is the honest ceiling. macOS has no kernel job-object/cgroup primitive. |
 
 ```powershell
 # Windows
@@ -150,7 +150,7 @@ type claude            # confirm: should print "claude is a function"
 
 Inside a Claude Code session on Windows, the same flow is `/structured-concurrency [kill|install|verify]`.
 
-A SessionStart hook (`hooks/reap-on-start.ps1`) runs the cleanup in strict-orphan-only mode on every CC start (Windows), so leftovers from un-wrapped or crashed sessions are reaped automatically. The Linux and macOS wrappers do not need a periodic reaper — cleanup runs at wrapper exit (Linux: `cgroup.kill`; macOS: the watchdog), not on a schedule.
+A SessionStart hook (`hooks/reap-on-start.ps1`) runs the cleanup in strict-orphan-only mode on every CC start (Windows), so leftovers from un-wrapped or crashed sessions are reaped automatically. The Linux and macOS wrappers do not need a periodic reaper. Cleanup runs at wrapper exit (Linux via `cgroup.kill`, macOS via the watchdog), not on a schedule.
 
 ## Auditable
 
@@ -194,7 +194,7 @@ No registry cleanup, no service removal, no leftover state.
 
 ## Configuration
 
-The cleanup engine is **dangerous-by-omission**. Without `~/.reap/config.json`, `cleanup-orphans.ps1 -Force` is a guaranteed no-op. Aggression is opt-in.
+The cleanup engine is dangerous-by-omission. Without `~/.reap/config.json`, `cleanup-orphans.ps1 -Force` is a guaranteed no-op. Aggression is opt-in.
 
 Pick a starter profile at install time:
 
@@ -215,7 +215,7 @@ Full schema, the `predicate.ps1` escape hatch for procedural rules, and worked c
 
 ## How it works
 
-The same idea — let the OS, not the application, enforce parent-death cleanup — has different kernel primitives on each platform.
+The idea is the same on every platform: the OS, not the application, enforces parent-death cleanup. What differs is the kernel primitive.
 
 ### Windows
 
@@ -243,19 +243,19 @@ Fallback path (kernels <5.14, containers without systemd, WSL1):
 
 1. `set -m` so the spawned child gets its own process group (pgid == pid).
 2. `trap 'kill -TERM "-$child_pgid"; sleep 0.5; kill -KILL "-$child_pgid"' EXIT INT TERM HUP`.
-3. On graceful wrapper exit or signal, the trap fires `killpg`. SIGKILL of the wrapper itself escapes — the trap doesn't fire for `-9`. That's the documented MEDIUM-tier gap.
+3. On graceful wrapper exit or signal, the trap fires `killpg`. SIGKILL of the wrapper itself escapes: the trap doesn't fire for `-9`. That's the documented MEDIUM-tier gap.
 
 There is no application code path that can leak on the strong paths. This is structured concurrency enforced by the operating system, the way Nathaniel J. Smith [originally framed](https://vorpus.org/blog/notes-on-structured-concurrency-or-go-statement-considered-harmful/) the problem class. Application discipline is what produced the leaks in the first place.
 
 ### macOS
 
-macOS has no `cgroup.kill` and no Win32 Job Object. `prctl(PR_SET_PDEATHSIG)` is Linux-only; there is no kernel primitive that atomically reaps a process subtree when an ancestor dies. The MEDIUM tier closes as much of that gap as the OS permits:
+macOS has no `cgroup.kill` and no Win32 Job Object. `prctl(PR_SET_PDEATHSIG)` is Linux-only. There is no kernel primitive that atomically reaps a process subtree when an ancestor dies. The MEDIUM tier closes as much of that gap as the OS permits:
 
 1. `set -m` so the spawned `claude` gets its own process group.
-2. `trap 'cleanup' EXIT INT TERM HUP` — graceful exit or any catchable signal `killpg`s the child group.
-3. A disowned watchdog subshell with its *own* process group records the wrapper's PID and start time (`ps -p "$pid" -o lstart=` — there is no `/proc` on macOS to read), then polls. When the wrapper disappears — including a Force-Quit / `kill -9` that the wrapper's own trap can never catch — the watchdog runs the same `cleanup()` and reaps the tree. On graceful exit the wrapper `kill -KILL`s the watchdog, since the watchdog traps catchable signals and would otherwise outlive its purpose.
+2. `trap 'cleanup' EXIT INT TERM HUP`: graceful exit or any catchable signal `killpg`s the child group.
+3. A disowned watchdog subshell with its own process group records the wrapper's PID and start time (`ps -p "$pid" -o lstart=`, since there is no `/proc` on macOS to read), then polls. When the wrapper disappears (including a Force-Quit or `kill -9` that the wrapper's own trap can never catch), the watchdog runs the same `cleanup()` and reaps the tree. On graceful exit the wrapper `kill -KILL`s the watchdog, since the watchdog traps catchable signals and would otherwise outlive its purpose.
 
-The honest ceiling: a *simultaneous* `kill -9` of both the wrapper and the watchdog leaves the child group unreaped, because nothing is left alive to do it and macOS offers no kernel fallback. That exact scenario is asserted — and proven still-failing-by-design — in `tests/macos/test-honesty.bats`, so the limit is documented in executable form, not just prose.
+The honest ceiling: a simultaneous `kill -9` of both the wrapper and the watchdog leaves the child group unreaped, because nothing is left alive to do it and macOS offers no kernel fallback. That exact scenario is asserted in `tests/macos/test-honesty.bats` and proven still-failing-by-design, so the limit is documented in executable form, not just prose.
 
 Full architecture: [`DESIGN.md`](DESIGN.md).
 
@@ -267,7 +267,7 @@ Full architecture: [`DESIGN.md`](DESIGN.md).
 
 | Suite | Coverage |
 |-------|----------|
-| `tests/test-job-object.ps1` | Functional. Spawns a sleeping child, closes the job handle, asserts the child died within 2 seconds. **9 ms measured** on Windows 11 build 26200. |
+| `tests/test-job-object.ps1` | Functional. Spawns a sleeping child, closes the job handle, asserts the child died within 2 seconds. 9 ms measured on Windows 11 build 26200. |
 | `tests/test-orphan-detect.ps1` | Synthetic snapshots. Orphan detection, PID-reuse guard via `StartTime` comparison, classification, descendant tree walk. |
 | `tests/test-config-loader.ps1` | Config schema. Defaults, malformed-JSON fallback, partial-config merge, and the spare-wins-over-kill safety invariant. |
 | `tests/test-spawn-plan.ps1` | Wrapper host-routing for `.cmd` / `.bat` / `.ps1` shims (npm-installed Claude ships a shim, not an `.exe`). Extension-priority resolution. 14 assertions. |
@@ -276,10 +276,10 @@ Full architecture: [`DESIGN.md`](DESIGN.md).
 
 | Suite | Coverage |
 |-------|----------|
-| `tests/linux/test-find-claude.bats` | Probe priority: PATH > npm prefix > nvm (highest version) > fnm > yarn global. Sandboxed PATH+HOME so probes only hit fixtures. The 127-when-not-found contract and source-mode contract. 8 tests. (Probes 3-4 — Homebrew paths — honestly skip on Linux runners; they are exercised by the macOS suite on the macos-14 leg.) |
+| `tests/linux/test-find-claude.bats` | Probe priority: PATH > npm prefix > nvm (highest version) > fnm > yarn global. Sandboxed PATH+HOME so probes only hit fixtures. The 127-when-not-found contract and source-mode contract. 8 tests. (Probes 3-4, the Homebrew paths, skip on Linux runners. The macOS suite exercises them on the macos-14 leg.) |
 | `tests/linux/test-pgid-cleanup.bats` | Forces fallback path via `CLAUDE_JOBBED_FORCE_FALLBACK=1`. Spawns a fake claude that backgrounds a grandchild, kills the wrapper with SIGTERM, polls (3s budget) for grandchild death. Plus exit-code propagation and verbatim arg forwarding. 3 tests. |
 | `tests/linux/test-cgroup-kill.bats` | Load-bearing parity test against Win32 `KILL_ON_JOB_CLOSE`. Lets the wrapper take the strong (`systemd-run --scope`) path, then SIGKILLs the wrapper. Bash traps don't fire on `-9`, so only kernel-enforced cleanup via `cgroup.kill` can satisfy this. Skips with a printed reason if `systemd-run` is missing, `--user` systemd is inactive, or kernel < 5.14. 1 test. |
-| `tests/linux/test-installer.bats` | Sandboxes HOME; covers `--yes` inject, idempotent re-run preserving marker count, `--force` overwrite (count stays at 2 not 4), `--uninstall` clean removal, `--uninstall` no-op, and unknown-flag exit code 2. 6 tests. |
+| `tests/linux/test-installer.bats` | Sandboxes HOME. Covers `--yes` inject, idempotent re-run preserving marker count, `--force` overwrite (count stays at 2 not 4), `--uninstall` clean removal, `--uninstall` no-op, and unknown-flag exit code 2. 6 tests. |
 
 **macOS (`tests/macos/test-*.bats`):**
 
@@ -287,8 +287,8 @@ Full architecture: [`DESIGN.md`](DESIGN.md).
 |-------|----------|
 | `tests/macos/test-find-claude.bats` | Same probe-priority contract as Linux, plus the macOS-specific fnm `~/Library/Application Support/fnm` probe. Sandboxed PATH+HOME. 10 tests. |
 | `tests/macos/test-pgid-cleanup.bats` | Spawns a fake claude that backgrounds a grandchild, kills the wrapper with SIGTERM, polls for grandchild death. Plus exit-code propagation and verbatim arg forwarding. Single macOS path (no FORCE_FALLBACK split). 3 tests. |
-| `tests/macos/test-honesty.bats` | The load-bearing negative test that pins the honest MEDIUM ceiling. CASE 1: SIGKILL the wrapper alone — the disowned watchdog must outlive it and reap the grandchild (proves MEDIUM). CASE 2: SIGKILL wrapper and watchdog simultaneously — the grandchild survives, the documented un-closeable ceiling on a kernel with no job-object primitive. 2 tests. |
-| `tests/macos/test-installer.bats` | Sandboxes HOME; covers `--yes` inject into `~/.zshrc` + `~/.bashrc` + `~/.bash_profile`, the honest-ceiling install banner text, idempotent re-run, `--force` no-dup, `--uninstall` clean removal across all three rc files, `--uninstall` no-op, and unknown-flag exit code 2. 7 tests. |
+| `tests/macos/test-honesty.bats` | The load-bearing negative test that pins the honest MEDIUM ceiling. CASE 1: SIGKILL the wrapper alone. The disowned watchdog must outlive it and reap the grandchild (proves MEDIUM). CASE 2: SIGKILL wrapper and watchdog simultaneously. The grandchild survives, which is the documented un-closeable ceiling on a kernel with no job-object primitive. 2 tests. |
+| `tests/macos/test-installer.bats` | Sandboxes HOME. Covers `--yes` inject into `~/.zshrc` + `~/.bashrc` + `~/.bash_profile`, the honest-ceiling install banner text, idempotent re-run, `--force` no-dup, `--uninstall` clean removal across all three rc files, `--uninstall` no-op, and unknown-flag exit code 2. 7 tests. |
 
 ```powershell
 # Windows
@@ -306,11 +306,11 @@ bats --print-output-on-failure tests/linux/
 bats --print-output-on-failure tests/macos/
 ```
 
-CI runs all three platforms on every push (`.github/workflows/test.yml`): `ubuntu-latest` for the Linux bats suite (with `loginctl enable-linger` so `systemctl --user` is active and the cgroup-kill test exercises the strong path instead of skipping), `macos-14` (Apple Silicon) for the macOS bats suite, and `windows-latest` for the PowerShell suite. Hosted Intel macOS (`macos-13`) is intentionally not a CI leg — GitHub is retiring hosted Intel macOS, so that leg never received a runner and ran to GitHub's hard 24h "awaiting a runner" ceiling on every push; the runtime scripts are architecture-neutral and bash-3.2-safe by construction, so only x86_64 *execution* is uncovered, tracked as an explicit open gap in [#3](https://github.com/ron2k1/claude-code-structured-concurrency/issues/3). The macOS leg includes a probe step that records `sw_vers` / `uname -m` and which bash actually runs the suite: GitHub's macOS runners put a modern Homebrew bash ahead of Apple's frozen `/bin/bash` 3.2.57 on PATH, so a dedicated `/bin/bash -n` static-parse step proves the runtime scripts parse under real Apple stock bash even though bats itself runs under the newer bash — the gap is documented, not hidden. If a suite fails on your Windows build, file an issue with the output of `winver`. If it fails on a Linux distro, include `uname -r` and `systemctl --user is-active default.target`; on macOS include `sw_vers` and `uname -m`.
+CI runs all three platforms on every push (`.github/workflows/test.yml`): `ubuntu-latest` for the Linux bats suite (with `loginctl enable-linger` so `systemctl --user` is active and the cgroup-kill test exercises the strong path instead of skipping), `macos-14` (Apple Silicon) for the macOS bats suite, and `windows-latest` for the PowerShell suite. Hosted Intel macOS (`macos-13`) is intentionally not a CI leg. GitHub is retiring hosted Intel macOS, so that leg never received a runner and ran to GitHub's hard 24h "awaiting a runner" ceiling on every push. The runtime scripts are architecture-neutral and bash-3.2-safe by construction, so only x86_64 execution is uncovered, tracked as an explicit open gap in [#3](https://github.com/ron2k1/claude-code-structured-concurrency/issues/3). The macOS leg includes a probe step that records `sw_vers` / `uname -m` and which bash actually runs the suite: GitHub's macOS runners put a modern Homebrew bash ahead of Apple's frozen `/bin/bash` 3.2.57 on PATH, so a dedicated `/bin/bash -n` static-parse step proves the runtime scripts parse under real Apple stock bash even though bats itself runs under the newer bash. The gap is documented, not hidden. If a suite fails on your Windows build, file an issue with the output of `winver`. If it fails on a Linux distro, include `uname -r` and `systemctl --user is-active default.target`. On macOS include `sw_vers` and `uname -m`.
 
 ## Safety guarantees
 
-- `cc-procs.ps1` never kills. No `Stop-Process`, no `taskkill`, no `TerminateProcess`. Run it any time.
+- `cc-procs.ps1` never kills. There is no `Stop-Process`, `taskkill`, or `TerminateProcess` anywhere in it. Run it any time.
 - `cleanup-orphans.ps1` defaults to dry-run. Live kills require both `-Force` and a config that opts in. With no `~/.reap/config.json`, the engine is a guaranteed no-op even with `-Force`.
 - The engine never blanket-kills `node.exe` by name. `spare_classifications` always runs first.
 - `claude-jobbed.ps1` is opt-in. Plain `claude.exe` still works without the wrapper, just unprotected.
@@ -318,9 +318,9 @@ CI runs all three platforms on every push (`.github/workflows/test.yml`): `ubunt
 ## What this does not do
 
 - Replace Claude Code's own subprocess discipline. Anthropic can ship Job Objects + cgroups natively. This is the user-side workaround until they do.
-- Fully match the Windows/Linux STRONG tier on macOS. macOS has neither `cgroup.kill` nor a Job-Object equivalent — `prctl(PR_SET_PDEATHSIG)` is Linux-only. v1.2.0 ships the MEDIUM tier: `setpgid` + `trap` + a disowned out-of-process watchdog, which *does* survive Force-Quit of the wrapper alone (the watchdog outlives it and reaps the tree). The honest ceiling — a *simultaneous* `kill -9` of both wrapper and watchdog — is unrecoverable, and that exact ceiling is pinned by `tests/macos/test-honesty.bats` so it cannot silently regress. A future Swift `kqueue`/`launchd` helper that could close the gap is conditional on telemetry.
+- Fully match the Windows/Linux STRONG tier on macOS. macOS has neither `cgroup.kill` nor a Job-Object equivalent, and `prctl(PR_SET_PDEATHSIG)` is Linux-only. v1.2.0 ships the MEDIUM tier: `setpgid` + `trap` + a disowned out-of-process watchdog, which does survive Force-Quit of the wrapper alone (the watchdog outlives it and reaps the tree). The honest ceiling, a simultaneous `kill -9` of both wrapper and watchdog, is unrecoverable. That exact ceiling is pinned by `tests/macos/test-honesty.bats` so it cannot silently regress. A future Swift `kqueue`/`launchd` helper that could close the gap is conditional on telemetry.
 - Wrap a `claude` that's already running. Restart your shell after install (Windows or Linux).
-- Auto-shadow launchers that bypass shell rc files: `Win+R`, desktop shortcuts to `claude.exe`, Task Scheduler entries, VS Code's terminal until reloaded; on Linux/macOS that's anything launched with `env -i` or by a service manager that strips the rc files. Bare cmd.exe has no AutoRun auto-shadow either — though [`tools\claude-jobbed.cmd`](tools/claude-jobbed.cmd) gives cmd.exe users the full STRONG guarantee when invoked or aliased explicitly. See [`docs/FAQ.md`](docs/FAQ.md) for per-path remedies.
+- Auto-shadow launchers that bypass shell rc files: `Win+R`, desktop shortcuts to `claude.exe`, Task Scheduler entries, VS Code's terminal until reloaded. On Linux/macOS that's anything launched with `env -i` or by a service manager that strips the rc files. Bare cmd.exe has no AutoRun auto-shadow either, though [`tools\claude-jobbed.cmd`](tools/claude-jobbed.cmd) gives cmd.exe users the full STRONG guarantee when invoked or aliased explicitly. See [`docs/FAQ.md`](docs/FAQ.md) for per-path remedies.
 
 ## License
 
