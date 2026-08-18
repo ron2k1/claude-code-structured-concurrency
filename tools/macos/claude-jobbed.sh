@@ -44,6 +44,20 @@ if ! claude_path="$(find_claude)"; then
     exit 127
 fi
 
+# Interactive sessions must own the terminal. A child launched with `&`
+# under `set -m` lands in a background process group, and the first
+# tcsetattr the TUI makes (raw mode) draws SIGTTOU and suspends it --
+# `claude` then looks like it never loads while the wrapper blocks in
+# `wait` forever. bash 3.2's non-interactive `fg` cannot hand the tty
+# over (no tcsetpgrp), so supervision and a foreground TUI are mutually
+# exclusive in pure bash: with a tty, get out of the way entirely.
+# exec keeps signal flow and exit codes identical to a bare `claude`;
+# the watchdog below still covers non-tty runs (scripts, pipes, agent
+# spawns), which is where orphan reaping actually pays rent.
+if [ -t 0 ]; then
+    exec "$claude_path" "$@"
+fi
+
 # `set -m` enables job control so every backgrounded job gets its OWN
 # process group (pgid == its own pid). This is load-bearing twice:
 #   1. the child's group is killable as `-$child_pgid` without also
