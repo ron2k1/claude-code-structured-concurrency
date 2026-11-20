@@ -206,6 +206,10 @@ if (-not $proc) {
     Close-CCJobObject -Job $job
     exit 126
 }
+# Windows PowerShell 5.1: a Process from Start-Process -PassThru has no
+# ExitCode unless its handle was opened while it ran, and the final
+# `exit $proc.ExitCode` came out 0. Reading .Handle opens and keeps it.
+$null = $proc.Handle
 
 # --- assign claude to the job (children inherit on Win8+) ---------------
 
