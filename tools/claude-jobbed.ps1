@@ -16,11 +16,11 @@
 # negligible for interactive use; v0.1.x will close it via
 # CREATE_SUSPENDED + ResumeThread when it matters.
 
-[CmdletBinding()]
-param(
-    [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]] $ClaudeArgs
-)
+# Arguments come from plain $args, not a param block. A [Parameter()] attribute
+# makes this an advanced script, and then claude's own flags bind to
+# PowerShell's common parameters: -p is ambiguous between -ProgressAction and
+# -PipelineVariable on pwsh 7.4+ and fails, -v turns on -Verbose, -d -Debug.
+[string[]] $ClaudeArgs = $args
 
 $ErrorActionPreference = 'Stop'
 
@@ -177,12 +177,27 @@ $startParams = @{
     NoNewWindow = $true   # share console -> stdin/stdout/stderr forward
 }
 
-$allArgs = @($plan.HostArgs)
-if ($ClaudeArgs -and $ClaudeArgs.Count -gt 0) {
-    $allArgs += $ClaudeArgs
+# Start-Process joins an -ArgumentList array with bare spaces, so
+# `claude -p "two words"` used to reach claude as -p, two, words. The command
+# line is built here instead, each argument quoted the way CommandLineToArgvW
+# (and node, and bun) split it back. A shim runs as cmd.exe /s /c "<line>":
+# /s makes cmd strip exactly the outer pair of quotes, so a quoted shim path
+# and quoted arguments survive, and & | < > ^ ( ) stay literal inside quotes.
+function ConvertTo-CommandLineArg([string] $Arg) {
+    if ($Arg.Length -gt 0 -and $Arg -notmatch '[\s"&|<>^()]') { return $Arg }
+    # backslashes double only where they end up before a quote
+    '"' + ($Arg -replace '(\\*)"', '$1$1\"' -replace '(\\+)$', '$1$1') + '"'
 }
-if ($allArgs.Count -gt 0) {
-    $startParams.ArgumentList = $allArgs
+
+$quotedArgs = @($ClaudeArgs | ForEach-Object { ConvertTo-CommandLineArg $_ })
+if ($plan.HostExe -eq 'cmd.exe') {
+    # Get-ClaudeSpawnPlan's cmd plan is /c <shim>; the shim is $claudePath
+    $line = '/s /c "' + ((@(ConvertTo-CommandLineArg $claudePath) + $quotedArgs) -join ' ') + '"'
+} else {
+    $line = (@($plan.HostArgs | ForEach-Object { ConvertTo-CommandLineArg $_ }) + $quotedArgs) -join ' '
+}
+if ($line) {
+    $startParams.ArgumentList = $line
 }
 
 $proc = Start-Process @startParams
