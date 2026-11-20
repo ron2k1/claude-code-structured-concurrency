@@ -29,6 +29,36 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $here 'lib\SpawnPlan.ps1')
 
 # --- locate claude.exe --------------------------------------------------
+#
+# First hit wins:
+#   a. a real `claude` application on PATH. -CommandType Application skips
+#      the profile's `claude` function, so the wrapper never finds itself.
+#   b. the native installer's %USERPROFILE%\.local\bin\claude.exe
+#   c. npm's %APPDATA%\npm\claude.cmd
+#      (then the older install locations this wrapper has always probed)
+#   d. the newest claude.exe bundled with the Claude desktop app, under
+#      %LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\claude-code\<version>\
+# If none of them exists, the whole lookup is retried for up to ~5 s before
+# giving up: `npm install -g` deletes the shim and writes it back, so a
+# launch during an update can briefly see no claude at all.
+
+$ClaudeRetryMs     = 5000
+$ClaudeRetryStepMs = 500
+$ClaudeReinstall   = 'irm https://claude.ai/install.ps1 | iex'
+
+function Get-ClaudeCandidatePath {
+    # b and c, then the older locations. Native-installer paths hold a real
+    # PE binary and, unlike npm shims, are not deleted-then-recreated
+    # mid-update (npm install -g leaves a window where no shim exists).
+    @(
+        (Join-Path $env:USERPROFILE  '.local\bin\claude.exe'),
+        (Join-Path $env:APPDATA      'npm\claude.cmd'),
+        (Join-Path $env:USERPROFILE  '.claude\local\claude.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\@anthropic-ai\claude-code\claude.exe'),
+        (Join-Path $env:APPDATA      'npm\claude.ps1'),
+        (Join-Path $env:ProgramFiles 'nodejs\claude.cmd')
+    )
+}
 
 function Find-ClaudeExe {
     # Extension preference: prefer a real PE binary when one exists, then
@@ -37,40 +67,92 @@ function Find-ClaudeExe {
     # while claude.cmd -> cmd.exe -> node.exe survives any I/O attachment.
     $extRank = @{ '.exe' = 0; '.cmd' = 1; '.bat' = 2; '.ps1' = 3 }
 
-    # 1. PATH (Get-Command may return both shims; bias by extension)
-    $matches = Get-Command claude -All -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandType -in 'Application', 'ExternalScript' }
-    if ($matches) {
-        $cmd = $matches | Sort-Object {
+    # a. PATH. Applications only, never the `claude` function or an alias.
+    $onPath = Get-Command claude -CommandType Application -All -ErrorAction SilentlyContinue
+    if ($onPath) {
+        $cmd = $onPath | Sort-Object {
             $ext = ([System.IO.Path]::GetExtension($_.Source)).ToLowerInvariant()
             if ($extRank.ContainsKey($ext)) { $extRank[$ext] } else { 99 }
         } | Select-Object -First 1
         if ($cmd) { return $cmd.Source }
     }
 
-    # 2. Common install locations. Native-installer paths first: they hold a
-    # real PE binary and, unlike npm shims, are not deleted-then-recreated
-    # mid-update (npm install -g leaves a window where no shim exists).
-    $candidates = @(
-        (Join-Path $env:USERPROFILE  '.local\bin\claude.exe'),
-        (Join-Path $env:USERPROFILE  '.claude\local\claude.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Programs\@anthropic-ai\claude-code\claude.exe'),
-        (Join-Path $env:APPDATA      'npm\claude.cmd'),
-        (Join-Path $env:APPDATA      'npm\claude.ps1'),
-        (Join-Path $env:ProgramFiles 'nodejs\claude.cmd')
-    )
-    foreach ($c in $candidates) {
-        if (Test-Path $c) { return (Resolve-Path $c).Path }
+    # b, c and the older locations
+    foreach ($c in (Get-ClaudeCandidatePath)) {
+        if (Test-Path -LiteralPath $c) { return (Resolve-Path -LiteralPath $c).Path }
     }
     return $null
 }
 
-$claudePath = Find-ClaudeExe
+function Find-ClaudeDesktopExe {
+    # d. The desktop app keeps one folder per bundled CLI version. Compare
+    # them as [version] so 2.1.100 beats 2.1.99, and skip any folder whose
+    # name is not a version.
+    $packages = Join-Path $env:LOCALAPPDATA 'Packages'
+    if (-not (Test-Path -LiteralPath $packages)) { return $null }
+    $best = $null
+    foreach ($pkg in @(Get-ChildItem -LiteralPath $packages -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue)) {
+        $root = Join-Path $pkg.FullName 'LocalCache\Roaming\Claude\claude-code'
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        foreach ($dir in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
+            $ver = $null
+            if (-not [version]::TryParse($dir.Name, [ref] $ver)) { continue }
+            $exe = Join-Path $dir.FullName 'claude.exe'
+            if (-not (Test-Path -LiteralPath $exe)) { continue }
+            if (($null -eq $best) -or ($ver -gt $best.Version)) {
+                $best = @{ Path = $exe; Version = $ver }
+            }
+        }
+    }
+    return $best
+}
+
+function Write-WrapperNote {
+    # stderr, so `claude -p ... > out.txt` keeps clean output. The colour is
+    # best effort: there is no console colour to set when stderr is redirected.
+    param([string] $Text, [ConsoleColor] $Color)
+    $old = $null
+    try { $old = [Console]::ForegroundColor; [Console]::ForegroundColor = $Color } catch { $old = $null }
+    [Console]::Error.WriteLine($Text)
+    if ($null -ne $old) { try { [Console]::ForegroundColor = $old } catch { } }
+}
+
+$claudePath = $null
+$desktop = $null
+$clock = [System.Diagnostics.Stopwatch]::StartNew()
+while ($true) {
+    $claudePath = Find-ClaudeExe
+    if ($claudePath) { break }
+    $desktop = Find-ClaudeDesktopExe
+    if ($desktop) { $claudePath = $desktop.Path; break }
+    if ($clock.ElapsedMilliseconds -ge $ClaudeRetryMs) { break }
+    Start-Sleep -Milliseconds $ClaudeRetryStepMs
+}
+
 if (-not $claudePath) {
-    Write-Error ("claude not found in PATH or common install locations. " +
-        "If Claude Code is updating right now, the npm shims vanish for a few " +
-        "seconds mid-reinstall -- retry shortly. Otherwise install Claude Code first.")
+    Write-WrapperNote 'claude-jobbed: claude not found. Checked, in order:' Red
+    Write-WrapperNote '  PATH (Get-Command claude -CommandType Application)' Red
+    foreach ($c in (Get-ClaudeCandidatePath)) { Write-WrapperNote ('  ' + $c) Red }
+    Write-WrapperNote ('  ' + (Join-Path $env:LOCALAPPDATA 'Packages\Claude_*\LocalCache\Roaming\Claude\claude-code\<version>\claude.exe')) Red
+    Write-WrapperNote ('Rechecked for {0} s in case an npm update had removed the shim. Reinstall with: {1}' -f ($ClaudeRetryMs / 1000), $ClaudeReinstall) Red
     exit 127
+}
+
+if ($desktop) {
+    Write-WrapperNote ('claude-jobbed: standalone Claude Code CLI not found. Using the copy bundled with the Claude desktop app ({0}). Reinstall: {1}' -f $desktop.Version, $ClaudeReinstall) Yellow
+}
+
+# --- bypass: CLAUDE_NO_WRAPPER skips the Job Object ---------------------
+#
+# Runs the resolved binary directly, with no job, so orphans on that run
+# are NOT reaped. Meant for debugging the wrapper itself. EAP goes back to
+# Continue first: under Stop, Windows PowerShell 5.1 can turn a line of
+# claude's stderr into a terminating error.
+
+if ($env:CLAUDE_NO_WRAPPER) {
+    $ErrorActionPreference = 'Continue'
+    & $claudePath @ClaudeArgs
+    exit $LASTEXITCODE
 }
 
 # --- create job (kill-on-close) -----------------------------------------
