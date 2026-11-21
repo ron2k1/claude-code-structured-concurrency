@@ -132,13 +132,21 @@ Edit `~/.claude/settings.json`:
   "hooks": {
     "SessionStart": [
       {
-        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%USERPROFILE%\\.claude\\skills\\structured-concurrency\\hooks\\reap-on-start.ps1\"",
-        "timeout_ms": 10000
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$USERPROFILE/.claude/skills/structured-concurrency/hooks/reap-on-start.ps1\"",
+            "timeout": 30,
+            "async": true
+          }
+        ]
       }
     ]
   }
 }
 ```
+
+Claude Code runs hook commands through Git Bash on Windows, so the path uses `$USERPROFILE`. A cmd-style `%USERPROFILE%` is passed through unexpanded and the hook fails with "-File ... does not exist". `timeout` is in seconds, and `async` keeps the reap off the startup path.
 
 The hook script never throws -- it logs and exits 0 even on failure, so a bad reap config can never block CC startup. Logs land at `~/.claude/hooks/reap.log`.
 
