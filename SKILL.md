@@ -59,7 +59,7 @@ When invoked:
 1. **Default (no args)**: run `tools/cc-procs.ps1` and report tree + orphan count + memory total.
 2. **`kill`**: run `tools/cleanup-orphans.ps1 -Force` with strict-orphan filter and report kills.
 3. **`install`**: run `tools/install-reap.ps1`, confirm it modified `$PROFILE` + `~/.bashrc`; show backup path. SessionStart hook wiring is documented but the user opts in by editing `~/.claude/settings.json` after a few dry-run sessions.
-4. **`verify`**: run the Windows suite (`tests/test-job-object.ps1`, `tests/test-orphan-detect.ps1`, `tests/test-config-loader.ps1`, `tests/test-spawn-plan.ps1`). The POSIX suites live in `tests/linux/*.bats` and `tests/macos/*.bats` and run in CI on the `ubuntu-latest` / `macos-14` legs (bats is not on Windows; hosted Intel `macos-13` execution is an open gap, see #3). All must pass before claiming the wrapper works.
+4. **`verify`**: run the Windows suite (`tests/test-job-object.ps1`, `tests/test-orphan-detect.ps1`, `tests/test-config-loader.ps1`, `tests/test-spawn-plan.ps1`). The POSIX suites live in `tests/linux/*.bats` and `tests/macos/*.bats` and run in CI on the `ubuntu-latest` / `macos-15` legs (bats is not on Windows; hosted Intel `macos-13` execution is an open gap, see #3). All must pass before claiming the wrapper works.
 5. **`wrap`**: invoke `tools/claude-jobbed.ps1` with the user's args, do not return until child claude exits.
 
 If user asks "what's running" without typing the slash command, still invoke `cc-procs.ps1` -- that's the read-only diagnostic, zero risk.
@@ -122,7 +122,7 @@ Tree below mirrors `git ls-files` exactly:
 |   +-- architecture.svg        (diagram)
 |   +-- demo.mp4                (screen capture)
 +-- .github/workflows/
-    +-- test.yml                (CI matrix: ubuntu-latest, macos-14, windows-latest)
+    +-- test.yml                (CI matrix: ubuntu-latest, macos-15, windows-latest)
 
 User-side state (NOT in repo, created by install-reap.ps1 / install.sh):
 ~/.reap/
@@ -163,4 +163,4 @@ Post-skill:
 - SessionStart hook: leftovers from un-wrapped sessions cleared on next CC start
 - Diagnostic surface: `cc-procs.ps1` shows orphan count + memory total any time
 
-macOS and Linux: validated in CI (GitHub `macos-14` / `ubuntu-latest` legs; hosted Intel `macos-13` execution dropped, tracked in #3), not locally micro-benched. The bats suites assert the wrapper reaps the tree and, for macOS, that the honest MEDIUM ceiling still holds (`tests/macos/test-honesty.bats`). The latency figures above are Windows-measured only -- no synthetic numbers are claimed for the POSIX tiers.
+macOS and Linux: validated in CI (GitHub `macos-15` / `ubuntu-latest` legs; hosted Intel `macos-13` execution dropped, tracked in #3), not locally micro-benched. The bats suites assert the wrapper reaps the tree and, for macOS, that the honest MEDIUM ceiling still holds (`tests/macos/test-honesty.bats`). The latency figures above are Windows-measured only -- no synthetic numbers are claimed for the POSIX tiers.

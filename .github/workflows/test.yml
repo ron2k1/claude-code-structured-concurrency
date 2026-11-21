@@ -50,7 +50,7 @@ jobs:
           bats --print-output-on-failure tests/linux/
 
   # ----- macOS: bats suite for tools/macos/ + install.sh (MEDIUM tier) ----
-  # arm64 only (macos-14). Hosted Intel macOS (macos-13) was dropped in
+  # arm64 only (macos-15; GitHub no longer serves the macos-14 image). Hosted Intel macOS (macos-13) was dropped in
   # v1.2.0: GitHub is retiring hosted Intel macOS, so the macos-13 leg
   # never got a runner -- every run sat in "awaiting a runner" until
   # GitHub's hard 24h account ceiling and was auto-cancelled. timeout-minutes
@@ -69,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14]
+        os: [macos-15]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
